@@ -23,7 +23,7 @@ export const metadata: Metadata = {
     "Shared household finance dashboard: monthly income, bills, shared expenses and the money each person has left.",
   keywords: ["household budget", "shared expenses", "finance", "João", "Anna"],
   icons: {
-    icon: "https://z-cdn.chatglm.cn/z-ai/static/logo.svg",
+    icon: "/logo.svg",
   },
 };
 
