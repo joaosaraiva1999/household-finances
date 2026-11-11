@@ -1,0 +1,48 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// Monthly income of a person for a given month (e.g. month = "2026-11")
+model Income {
+  id        String   @id @default(cuid())
+  person    String // "joao" | "anna"
+  month     String // "YYYY-MM"
+  amount    Float    @default(0) // monthly salary
+  mealCard  Float    @default(0) // meal card money (e.g. cartão-refeição) for the month
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([person, month])
+}
+
+// A household bill / expense for a given month — or a positive "credit"
+// entry (money in: refund, meal card top-up, bonus) that increases the
+// available balance instead of decreasing it.
+model Expense {
+  id          String   @id @default(cuid())
+  name        String
+  amount      Float
+  kind        String   @default("expense") // "expense" (money out) | "credit" (money in)
+  category    String   @default("Other")
+  responsible String   @default("shared") // "joao" | "anna" | "shared"
+  // For shared expenses: percentage paid by João (0-100). Anna pays 100 - joaoShare.
+  joaoShare   Float    @default(50)
+  // For shared expenses (money out): the exact amount each person paid.
+  // When set, they define the split (joaoShare stays in sync for display);
+  // null means the classic percentage split applies.
+  joaoPaid    Float?
+  annaPaid    Float?
+  dueDate     String? // "YYYY-MM-DD" within the month
+  paid        Boolean  @default(false)
+  notes       String?
+  month       String // "YYYY-MM"
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([month])
+}
