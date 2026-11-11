@@ -62,9 +62,8 @@ server.log
 /tool-results/
 /upload/
 /download/
-/.zscripts/
-/tests/
-/Caddyfile
-/examples/
-/mini-services/
 /agent-ctx/
+
+# NOTE: do NOT ignore platform scaffolding (.zscripts/, Caddyfile, mini-services/,
+# tests/, examples/) — the publish pipeline rebuilds the project from the git index
+# and executes .zscripts/*.sh + Caddyfile. Ignoring them breaks `publish`.
