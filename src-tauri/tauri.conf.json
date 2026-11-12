@@ -1,0 +1,48 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Finanças da Casa",
+  "version": "1.0.0",
+  "identifier": "app.financas.casa",
+  "build": {
+    "beforeDevCommand": "bun run desktop:dev",
+    "devUrl": "http://localhost:5173",
+    "beforeBuildCommand": "bun run desktop:build",
+    "frontendDist": "../desktop/dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Finanças da Casa",
+        "width": 1280,
+        "height": 820,
+        "minWidth": 960,
+        "minHeight": 640,
+        "center": true,
+        "resizable": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob:; connect-src ipc: http://ipc.localhost"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["deb", "appimage"],
+    "category": "Finance",
+    "shortDescription": "Finanças domésticas partilhadas — 100% offline",
+    "longDescription": "Painel de finanças domésticas partilhadas para duas pessoas: salários, despesas pessoais e partilhadas, divisão personalizada, cartão-refeição, créditos, gráficos e resumos mensais. Todos os dados ficam guardados localmente, sem servidor, sem conta e sem ligação à Internet.",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "linux": {
+      "deb": {
+        "depends": ["libwebkit2gtk-4.1-0", "libgtk-3-0"]
+      }
+    }
+  }
+}

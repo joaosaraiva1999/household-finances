@@ -1,0 +1,36 @@
+[package]
+name = "financas-da-casa"
+version = "1.0.0"
+description = "Finanças domésticas partilhadas — aplicação de ambiente de trabalho 100% offline"
+authors = ["João Saraiva"]
+license = "All rights reserved"
+repository = "https://github.com/joaosaraiva1999/household-finances"
+edition = "2021"
+rust-version = "1.77.2"
+
+[lib]
+name = "financas_da_casa_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[features]
+# Required for production builds to serve the bundled frontend assets.
+custom-protocol = ["tauri/custom-protocol"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rusqlite = { version = "0.37", features = ["bundled"] }
+chrono = { version = "0.4", features = ["clock"] }
+rand = "0.8"
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true
