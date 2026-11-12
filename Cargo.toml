@@ -1,0 +1,14 @@
+[workspace]
+resolver = "2"
+members = ["crates/finances-core", "src-tauri"]
+
+[workspace.package]
+version = "1.0.0"
+edition = "2021"
+license = "UNLICENSED"
+authors = ["João Saraiva"]
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true

@@ -38,9 +38,13 @@ This app handles personal financial data, so privacy was a design requirement, n
 
 - **Local-first storage** — all data lives in a single SQLite file on your machine (`db/custom.db`). There is no cloud, no sync, no server-side account. Nothing leaves your device.
 - **Zero external requests** — no analytics, no tracking, no telemetry, no third-party CDN calls. Fonts are downloaded once at build time and self-hosted by Next.js (`next/font`); every asset is served from your own app.
+- **Injection-proofed** — SQL, XML, CSS and CSV outputs are hardened: parameterized queries only (Prisma on the web, prepared statements in the Rust core), strict zod validation on every API input, database-level `CHECK` constraints, and escape/sanitization guardrails for XML, CSV (formula injection) and CSS. Verified by 37 web + 48 Rust security tests.
+- **Hardened HTTP surface** — nonce-based CSP, `X-Frame-Options`, `nosniff`, strict referrer/permissions policies, HSTS, same-origin enforcement on mutations, request-size caps and rate limiting.
 - **Secrets hygiene** — `.env` and `db/` are git-ignored, so no connection strings, tokens or personal data can enter the repository. The published git history starts from a single clean initial commit.
 - **Auditable by design** — a small, readable TypeScript codebase: you can verify in minutes that data never leaves the app.
 - **Honest limitation** — there is no built-in authentication. The app is designed to run on `localhost` for personal use; if you ever expose it beyond your machine, put it behind an authenticating reverse proxy (Tailscale, Cloudflare Access, basic-auth proxy) first.
+
+The full threat model, the protection matrix for **both the web and the Rust/Tauri desktop codebases**, and the verification commands live in [SECURITY.md](./SECURITY.md).
 
 ## Getting started
 

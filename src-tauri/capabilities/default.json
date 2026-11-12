@@ -1,0 +1,10 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Least-privilege capability for the main window: Tauri core defaults plus native file dialogs for backup/CSV import & export. No network, shell, fs-scope or other plugins are exposed.",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "dialog:default"
+  ]
+}

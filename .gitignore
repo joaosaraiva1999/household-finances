@@ -58,6 +58,22 @@ server.log
 *.db
 *.db-journal
 
+# rust / tauri build artifacts and local toolchains (never commit binaries)
+/target/
+crates/**/target/
+src-tauri/target/
+src-tauri/gen/
+Cargo.lock.orig
+.rustup/
+.cargo/
+# sqlite sidecar files and local backup copies
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+*.db-wal
+*.db-shm
+*.bak
+
 # sandbox / local artifacts
 /tool-results/
 /upload/
