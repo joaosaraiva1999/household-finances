@@ -1,25 +1,37 @@
 <div align="center">
 
-# Household Finances
+# Household Finances · Finanças da Casa
 
-**A shared household finance dashboard for two people — income, bills, credits and who owes what, at a glance.**
+**A shared household finance dashboard for two people — income, bills, credits and who owes what, at a glance. Available as a web app and as a fully offline desktop application.**
 
 ![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=next.js&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white)
 ![Prisma](https://img.shields.io/badge/Prisma-SQLite-2D3748?logo=prisma&logoColor=white)
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-4-38B2AC?logo=tailwindcss&logoColor=white)
+![Tauri 2](https://img.shields.io/badge/Tauri-2_Rust-FFC131?logo=tauri&logoColor=black)
 ![100% vibe coded](https://img.shields.io/badge/100%25-vibe_coded-699070)
 
 </div>
 
 > **This project is 100% vibe coded.**
-> No starter template, no copy-pasted tutorial code — the database schema, API routes, shared-cost split logic, bilingual dictionary, earth-tone glass UI and every icon were designed and built end-to-end in conversational sessions with an AI coding agent. The human brought taste, feedback and plain-language requests ("make it more natural", "i prefer a side bar"); the agent turned them into working software, one prompt at a time.
+> No starter template, no copy-pasted tutorial code — the database schema, API routes, shared-cost split logic, bilingual dictionary, earth-tone glass UI and every icon were designed and built end-to-end in conversational sessions with an AI coding agent. The human brought taste, feedback and plain-language requests ("make it more natural", "i prefer a side bar"); the agent turned them into working software, one prompt at a time. The desktop version is vibe coded too: a Rust/Tauri backend with integer-cent SQLite arithmetic, bridged to this same UI through a 60-line fetch shim.
 
 ---
 
 ## About
 
 Household Finances is a local-first web app for couples or flatmates who manage money together. Each person has their own region of the dashboard — salary and meal card on one side, theirs on the other — while shared bills can be split 50/50 (adjustable) or by actual paid amounts. A month picker keeps every view anchored to the right period, and charts show where the money went.
+
+## Two ways to use it
+
+| | **Web app** (this repo's Next.js app) | **Desktop app** (`src-tauri/`) |
+| --- | --- | --- |
+| Runs | Browser, via local Node server | Native window — no browser, no server |
+| Offline | Needs the dev/production server started | 100% offline after install |
+| Storage | SQLite via Prisma (`db/custom.db`) | SQLite in the OS app-data dir, integer cents |
+| Extras | — | Native menus, backups/restore, CSV export, web-data import |
+
+See **[DESKTOP.md](./DESKTOP.md)** for architecture, install instructions and build commands.
 
 ## Features
 

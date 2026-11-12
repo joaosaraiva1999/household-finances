@@ -1,0 +1,23 @@
+/* Desktop-only tweaks: local font stacks matching next/font variables. */
+:root {
+  --font-poppins: "Poppins", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-geist-mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  color-scheme: light;
+}
+
+.dark {
+  color-scheme: dark;
+}
+
+/* The desktop window never shows the web-only aurora overscroll bounce. */
+html,
+body {
+  overscroll-behavior: none;
+  user-select: none;
+}
+
+input,
+textarea,
+[contenteditable="true"] {
+  user-select: text;
+}
