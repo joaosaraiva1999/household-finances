@@ -44,7 +44,24 @@ const eslintConfig = [...nextCoreWebVitals, ...nextTypescript, {
     "no-useless-escape": "off",
   },
 }, {
-  ignores: ["node_modules/**", ".next/**", "out/**", "build/**", "next-env.d.ts", "examples/**", "skills"]
+  // Ignore build output, platform scaffolding and Rust artifacts/toolchains
+  // (.cargo/.rustup live inside the project for the desktop build).
+  ignores: [
+    "node_modules/**",
+    ".next/**",
+    "out/**",
+    "build/**",
+    "next-env.d.ts",
+    "examples/**",
+    "skills",
+    ".cargo/**",
+    ".rustup/**",
+    "target/**",
+    "crates/**/target/**",
+    "src-tauri/target/**",
+    "src-tauri/gen/**",
+    "src-tauri/icons/**",
+  ]
 }];
 
 export default eslintConfig;

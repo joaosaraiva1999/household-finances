@@ -3,13 +3,13 @@ import { db } from "@/lib/db";
 import {
   computeSummary,
   currentMonthKey,
-  isValidMonth,
   toMonthKey,
   type ExpenseRecord,
   type IncomeRecord,
   type Person,
   type Responsible,
 } from "@/lib/finance";
+import { financeQuerySchema } from "@/lib/validation";
 
 export const dynamic = "force-dynamic";
 
@@ -19,8 +19,10 @@ export const dynamic = "force-dynamic";
  * that already have data (so the month picker can extend dynamically).
  */
 export async function GET(request: NextRequest) {
-  const monthParam = request.nextUrl.searchParams.get("month");
-  const month = monthParam && isValidMonth(monthParam) ? monthParam : currentMonthKey();
+  const query = financeQuerySchema.safeParse({
+    month: request.nextUrl.searchParams.get("month") ?? "",
+  });
+  const month = query.success && query.data.month ? query.data.month : currentMonthKey();
 
   try {
     const [incomes, expenses, incomeMonths, expenseMonths] = await Promise.all([

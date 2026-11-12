@@ -1,94 +1,53 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import {
-  CATEGORIES,
-  normalizePaidSplit,
-  round2,
-  sharePercentFromPaid,
-} from "@/lib/finance";
+import { normalizePaidSplit, round2, sharePercentFromPaid } from "@/lib/finance";
+import { expensePatchSchema, firstIssue, idSchema } from "@/lib/validation";
 
 export const dynamic = "force-dynamic";
-
-const RESPONSIBLES = ["joao", "anna", "shared"];
 
 type RouteContext = { params: Promise<{ id: string }> };
 
 /** PATCH /api/expenses/[id] — update any field of an expense. */
 export async function PATCH(request: NextRequest, context: RouteContext) {
   try {
-    const { id } = await context.params;
-    const existing = await db.expense.findUnique({ where: { id } });
+    const rawId = (await context.params).id;
+    const id = idSchema.safeParse(rawId);
+    if (!id.success) {
+      return NextResponse.json({ error: "Invalid expense id" }, { status: 400 });
+    }
+
+    const existing = await db.expense.findUnique({ where: { id: id.data } });
     if (!existing) {
       return NextResponse.json({ error: "Expense not found" }, { status: 404 });
     }
 
-    const body = (await request.json()) as Record<string, unknown>;
+    const body = await request.json().catch(() => null);
+    const parsed = expensePatchSchema.safeParse(body ?? {});
+    if (!parsed.success) {
+      return NextResponse.json({ error: firstIssue(parsed.error) }, { status: 400 });
+    }
+    const patch = parsed.data;
+
     const data: Record<string, unknown> = {};
+    if (patch.name !== undefined) data.name = patch.name;
+    if (patch.amount !== undefined) data.amount = patch.amount;
+    if (patch.kind !== undefined) data.kind = patch.kind;
+    if (patch.responsible !== undefined) data.responsible = patch.responsible;
 
-    if (body.name !== undefined) {
-      const name = String(body.name).trim();
-      if (!name) return NextResponse.json({ error: "Name is required" }, { status: 400 });
-      data.name = name.slice(0, 120);
-    }
-
-    if (body.amount !== undefined) {
-      const amount = Number(body.amount);
-      if (!Number.isFinite(amount) || amount <= 0 || amount > 10_000_000) {
-        return NextResponse.json({ error: "Invalid amount" }, { status: 400 });
-      }
-      data.amount = Math.round(amount * 100) / 100;
-    }
-
-    if (body.kind !== undefined) {
-      const kind = String(body.kind);
-      if (!["expense", "credit"].includes(kind)) {
-        return NextResponse.json({ error: "Invalid entry type" }, { status: 400 });
-      }
-      data.kind = kind;
-    }
-
-    if (body.responsible !== undefined) {
-      const responsible = String(body.responsible);
-      if (!RESPONSIBLES.includes(responsible)) {
-        return NextResponse.json({ error: "Invalid responsible" }, { status: 400 });
-      }
-      data.responsible = responsible;
-    }
-
-    if (body.joaoShare !== undefined || data.responsible !== undefined) {
-      const responsible = (data.responsible as string | undefined) ?? existing.responsible;
+    if (patch.joaoShare !== undefined || data.responsible !== undefined) {
+      const responsible =
+        (data.responsible as string | undefined) ?? existing.responsible;
       if (responsible !== "shared") {
         data.joaoShare = responsible === "joao" ? 100 : 0;
       } else {
-        const raw = Number(body.joaoShare ?? existing.joaoShare);
-        const share = Number.isFinite(raw) ? Math.min(100, Math.max(0, raw)) : 50;
-        data.joaoShare = Math.round(share * 10) / 10;
+        data.joaoShare = patch.joaoShare ?? existing.joaoShare;
       }
     }
 
-    if (body.category !== undefined) {
-      const category = String(body.category);
-      data.category = (CATEGORIES as readonly string[]).includes(category)
-        ? category
-        : "Other";
-    }
-
-    if (body.dueDate !== undefined) {
-      const due = body.dueDate;
-      data.dueDate =
-        typeof due === "string" && /^\d{4}-\d{2}-\d{2}$/.test(due) ? due : null;
-    }
-
-    if (body.paid !== undefined) {
-      data.paid = Boolean(body.paid);
-    }
-
-    if (body.notes !== undefined) {
-      data.notes =
-        typeof body.notes === "string" && body.notes.trim()
-          ? body.notes.trim().slice(0, 500)
-          : null;
-    }
+    if (patch.category !== undefined) data.category = patch.category;
+    if (patch.dueDate !== undefined) data.dueDate = patch.dueDate ?? null;
+    if (patch.paid !== undefined) data.paid = patch.paid;
+    if (patch.notes !== undefined) data.notes = patch.notes ?? null;
 
     // ─── Per-person paid amounts (shared bills, money out) ─────────────
     // Effective values after applying the patch above.
@@ -98,9 +57,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     const effKind = (data.kind as string | undefined) ?? existing.kind;
 
     if (effResponsible === "shared" && effKind === "expense") {
-      const rawJoao = body.joaoPaid == null ? null : Number(body.joaoPaid);
-      const rawAnna = body.annaPaid == null ? null : Number(body.annaPaid);
-      const split = normalizePaidSplit(effAmount, rawJoao, rawAnna);
+      const split = normalizePaidSplit(effAmount, patch.joaoPaid, patch.annaPaid);
       if (split) {
         // Explicit paid amounts: keep the provided value, the other person
         // automatically covers the remainder of the bill.
@@ -132,7 +89,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       data.annaPaid = null;
     }
 
-    const expense = await db.expense.update({ where: { id }, data });
+    const expense = await db.expense.update({ where: { id: id.data }, data });
     return NextResponse.json({ expense });
   } catch (error) {
     console.error("PATCH /api/expenses/[id] failed:", error);
@@ -143,12 +100,17 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 /** DELETE /api/expenses/[id] — remove an expense. */
 export async function DELETE(_request: NextRequest, context: RouteContext) {
   try {
-    const { id } = await context.params;
-    const existing = await db.expense.findUnique({ where: { id } });
+    const rawId = (await context.params).id;
+    const id = idSchema.safeParse(rawId);
+    if (!id.success) {
+      return NextResponse.json({ error: "Invalid expense id" }, { status: 400 });
+    }
+
+    const existing = await db.expense.findUnique({ where: { id: id.data } });
     if (!existing) {
       return NextResponse.json({ error: "Expense not found" }, { status: 404 });
     }
-    await db.expense.delete({ where: { id } });
+    await db.expense.delete({ where: { id: id.data } });
     return NextResponse.json({ ok: true });
   } catch (error) {
     console.error("DELETE /api/expenses/[id] failed:", error);

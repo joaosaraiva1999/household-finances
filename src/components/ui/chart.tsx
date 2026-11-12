@@ -4,6 +4,10 @@ import * as React from "react"
 import * as RechartsPrimitive from "recharts"
 
 import { cn } from "@/lib/utils"
+import {
+  sanitizeCssColor,
+  sanitizeCssCustomPropKey,
+} from "@/lib/sanitize"
 
 // Format: { THEME_NAME: CSS_SELECTOR }
 const THEMES = { light: "", dark: ".dark" } as const
@@ -78,6 +82,15 @@ const ChartStyle = ({ id, config }: { id: string; config: ChartConfig }) => {
     return null
   }
 
+  // Defense-in-depth: keys and colors are built into a CSS string, so both
+  // are passed through strict allow-list sanitizers (see src/lib/sanitize.ts)
+  // — a hostile key or color could otherwise break out of the rule block.
+  const safeColorConfig = colorConfig.flatMap(([key, itemConfig]) => {
+    const safeKey = sanitizeCssCustomPropKey(key)
+    if (!safeKey) return []
+    return [[safeKey, itemConfig] as const]
+  })
+
   return (
     <style
       dangerouslySetInnerHTML={{
@@ -85,13 +98,15 @@ const ChartStyle = ({ id, config }: { id: string; config: ChartConfig }) => {
           .map(
             ([theme, prefix]) => `
 ${prefix} [data-chart=${id}] {
-${colorConfig
+${safeColorConfig
   .map(([key, itemConfig]) => {
-    const color =
+    const rawColor =
       itemConfig.theme?.[theme as keyof typeof itemConfig.theme] ||
       itemConfig.color
+    const color = rawColor ? sanitizeCssColor(rawColor) : null
     return color ? `  --color-${key}: ${color};` : null
   })
+  .filter(Boolean)
   .join("\n")}
 }
 `
