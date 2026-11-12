@@ -131,7 +131,7 @@ pub fn now_iso() -> String {
 /// Days since 1970-01-01 for a civil date (Howard Hinnant's algorithm).
 #[must_use]
 pub fn days_from_civil(y: i64, m: u32, d: u32) -> i64 {
-    let y = i64::from(y) - if m <= 2 { 1 } else { 0 };
+    let y = y - if m <= 2 { 1 } else { 0 };
     let era = if y >= 0 { y } else { y - 399 } / 400;
     let yoe = y - era * 400;
     let mp = (i64::from(m) + 9) % 12;

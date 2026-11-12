@@ -65,7 +65,10 @@ fn backup_round_trip_preserves_everything() {
     let expenses = repo::list_all_expenses(&other.conn).unwrap();
     assert_eq!(expenses.len(), 1);
     assert_eq!(expenses[0].name, "Rent with ' quote\" and = formula");
-    assert_eq!(expenses[0].notes.as_deref(), Some("=HYPERLINK('http://evil')"));
+    assert_eq!(
+        expenses[0].notes.as_deref(),
+        Some("=HYPERLINK('http://evil')")
+    );
     assert_eq!(expenses[0].amount_cents, 80_000);
     let incomes = repo::list_all_incomes(&other.conn).unwrap();
     assert_eq!(incomes[0].salary_cents, 200_000);

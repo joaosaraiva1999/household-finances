@@ -31,6 +31,7 @@ Household Finances is a local-first web app for couples or flatmates who manage 
 - **EN / PT bilingual UI** — one click switches the entire interface, persisted in `localStorage`
 - **Dark & light mode** — natural, minimalistic earth-tone palette (sage / clay / ochre) with glassmorphism styling
 - **Responsive** — sidebar navigation on desktop, collapsible drawer on mobile
+- **Desktop app (Rust / Tauri 2)** — the same UI compiled to a fully offline desktop program: SQLite in the OS app-data folder, integer-cents money math, checksummed backups, CSV export, native menu, zero network I/O — see [docs/DESKTOP.md](./docs/DESKTOP.md)
 
 ## Security & privacy
 
@@ -38,8 +39,8 @@ This app handles personal financial data, so privacy was a design requirement, n
 
 - **Local-first storage** — all data lives in a single SQLite file on your machine (`db/custom.db`). There is no cloud, no sync, no server-side account. Nothing leaves your device.
 - **Zero external requests** — no analytics, no tracking, no telemetry, no third-party CDN calls. Fonts are downloaded once at build time and self-hosted by Next.js (`next/font`); every asset is served from your own app.
-- **Injection-proofed** — SQL, XML, CSS and CSV outputs are hardened: parameterized queries only (Prisma on the web, prepared statements in the Rust core), strict zod validation on every API input, database-level `CHECK` constraints, and escape/sanitization guardrails for XML, CSV (formula injection) and CSS. Verified by 37 web + 48 Rust security tests.
-- **Hardened HTTP surface** — nonce-based CSP, `X-Frame-Options`, `nosniff`, strict referrer/permissions policies, HSTS, same-origin enforcement on mutations, request-size caps and rate limiting.
+- **Injection-proofed** — SQL, XML, CSS and CSV outputs are hardened: parameterized queries only (Prisma on the web, bound parameters in the Rust core), strict zod/Rust validation on every input, database-level `CHECK` constraints, and escape/sanitization guardrails for XML, CSV (formula injection) and CSS. All of it is pinned by an automated suite of **185 tests** (unit, API integration, middleware, cross-version parity, browser E2E) — plus regression tests for every bug the audit fixed.
+- **Hardened HTTP surface** — CSP (no framing, no objects, no base hijack, no cross-origin forms), `X-Frame-Options`, `nosniff`, strict referrer/permissions policies, HSTS, same-origin enforcement on mutations, request-size caps and rate limiting.
 - **Secrets hygiene** — `.env` and `db/` are git-ignored, so no connection strings, tokens or personal data can enter the repository. The published git history starts from a single clean initial commit.
 - **Auditable by design** — a small, readable TypeScript codebase: you can verify in minutes that data never leaves the app.
 - **Honest limitation** — there is no built-in authentication. The app is designed to run on `localhost` for personal use; if you ever expose it beyond your machine, put it behind an authenticating reverse proxy (Tailscale, Cloudflare Access, basic-auth proxy) first.
@@ -77,6 +78,26 @@ bun run dev          # or: npm run dev
 
 Open http://localhost:3000.
 
+### Desktop app (optional)
+
+```bash
+bun install
+bunx @tauri-apps/cli build   # → installers in src-tauri/target/release/bundle/
+```
+
+Full build/run/first-run data-migration instructions: [docs/DESKTOP.md](./docs/DESKTOP.md).
+
+## Testing
+
+```bash
+bun test                              # web: unit + API integration + middleware + parity (122 tests)
+bunx tsc --noEmit && bun run lint     # type-check + lint gates
+cargo test -p finances-core           # desktop core: 53 tests incl. injection & migration suites
+cargo audit && bun audit              # dependency security audits
+```
+
+The full audit (coverage, fixed findings, parity results): [docs/AUDIT_REPORT.md](./docs/AUDIT_REPORT.md).
+
 ## Scripts
 
 | Command | Description |
@@ -84,13 +105,15 @@ Open http://localhost:3000.
 | `bun run dev` | Start the development server on port 3000 |
 | `bun run build` | Create a production build |
 | `bun run start` | Run the production build |
+| `bun run build:desktop` | Static export of the UI for the Tauri desktop shell |
 | `bun run lint` | Run ESLint |
+| `bun test` | Run the web test suite |
 | `bun run db:push` | Push the Prisma schema to SQLite |
 | `bun run db:generate` | Generate the Prisma client |
 
 ## Tech stack
 
-Next.js 16 (App Router) · TypeScript · Tailwind CSS 4 · shadcn/ui · lucide-react · Recharts · Prisma · SQLite
+Next.js 16 (App Router) · TypeScript · Tailwind CSS 4 · shadcn/ui · lucide-react · Recharts · Prisma · SQLite · Rust · Tauri 2 · rusqlite
 
 ## Project structure
 
@@ -99,8 +122,14 @@ src/
   app/                 # App Router pages + API routes (/api/expenses, /api/income, /api/finance)
   components/finance/  # Dashboard, expense dialog/list, person cards, charts, sidebar
   components/ui/       # shadcn/ui primitives
-  lib/                 # Finance logic, i18n dictionary, category icons, db client
+  hooks/use-finance.ts # Data hooks (transport-aware: fetch on web, Tauri IPC on desktop)
+  lib/                 # Finance logic, validation, sanitizers, transport, i18n, db client
 prisma/schema.prisma   # Income & Expense models
+crates/finances-core/  # Rust desktop core: SQLite storage, validation, money math, backup/CSV
+crates/finances-core/tests/  # SQL-injection, parity, backup and migration test suites
+src-tauri/             # Tauri 2 shell: commands, CSP, capabilities, icons, bundling
+tests/                 # Web API integration, middleware and cross-version parity suites
+docs/                  # Desktop instructions + full audit report
 ```
 
 ## License

@@ -95,11 +95,14 @@ function Carousel({
 
   React.useEffect(() => {
     if (!api) return
-    onSelect(api)
+    // The initial can-scroll state is computed after the instance exists —
+    // deferred so we never call setState synchronously inside the effect.
+    const initial = setTimeout(() => onSelect(api), 0)
     api.on("reInit", onSelect)
     api.on("select", onSelect)
 
     return () => {
+      clearTimeout(initial)
       api?.off("select", onSelect)
     }
   }, [api, onSelect])

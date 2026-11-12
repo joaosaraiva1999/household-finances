@@ -170,7 +170,10 @@ pub fn parse_month(raw: &str) -> Result<String> {
     let ok = s.len() == 7
         && is_digits(&s[..4])
         && s.as_bytes()[4] == b'-'
-        && matches!(&s[5..], "01" | "02" | "03" | "04" | "05" | "06" | "07" | "08" | "09" | "10" | "11" | "12");
+        && matches!(
+            &s[5..],
+            "01" | "02" | "03" | "04" | "05" | "06" | "07" | "08" | "09" | "10" | "11" | "12"
+        );
     if ok {
         Ok(s.to_string())
     } else {
@@ -247,7 +250,7 @@ pub fn validate_expense_cents(cents: i64) -> Result<i64> {
 
 /// Validate an income field in cents: `0 <= cents <= INCOME_MAX_CENTS`.
 pub fn validate_income_cents(cents: i64) -> Result<i64> {
-    if cents < 0 || cents > crate::money::INCOME_MAX_CENTS {
+    if !(0..=crate::money::INCOME_MAX_CENTS).contains(&cents) {
         return Err(AppError::Validation(
             "Income value must be within limits".to_string(),
         ));
@@ -327,7 +330,10 @@ mod tests {
         assert!(validate_expense_cents(0).is_err());
         assert!(validate_expense_cents(-1).is_err());
         assert!(validate_expense_cents(1_000_000_001).is_err());
-        assert_eq!(validate_expense_cents(1_000_000_000).unwrap(), 1_000_000_000);
+        assert_eq!(
+            validate_expense_cents(1_000_000_000).unwrap(),
+            1_000_000_000
+        );
         assert!(validate_income_cents(-1).is_err());
         assert_eq!(validate_income_cents(0).unwrap(), 0);
     }

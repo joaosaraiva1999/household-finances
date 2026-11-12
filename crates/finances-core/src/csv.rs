@@ -70,7 +70,10 @@ mod tests {
 
     #[test]
     fn keeps_normal_text() {
-        assert_eq!(sanitize_cell("Groceries – Pingo Doce"), "Groceries – Pingo Doce");
+        assert_eq!(
+            sanitize_cell("Groceries – Pingo Doce"),
+            "Groceries – Pingo Doce"
+        );
         assert_eq!(sanitize_cell("Renda 800"), "Renda 800");
         // A safe leading minus number is still prefixed — conservative by design.
         assert_eq!(sanitize_cell("-5"), "'-5");

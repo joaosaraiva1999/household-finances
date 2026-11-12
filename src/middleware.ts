@@ -129,36 +129,30 @@ export function middleware(request: NextRequest) {
   }
 
   // ── Content-Security-Policy ──────────────────────────────────────────────
-  const cspHeader =
-    process.env.NODE_ENV === "production" && !isApi
-      ? (() => {
-          // Nonce-based strict CSP; Next.js applies the nonce from the
-          // request headers to its own bootstrap scripts automatically.
-          const nonce = btoa(crypto.randomUUID());
-          return [
-            `default-src 'self'`,
-            `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`,
-            `style-src 'self' 'unsafe-inline'`,
-            `img-src 'self' data: blob:`,
-            `font-src 'self' data:`,
-            `connect-src 'self'`,
-            `object-src 'none'`,
-            `base-uri 'self'`,
-            `form-action 'self'`,
-            `frame-ancestors 'none'`,
-          ].join("; ");
-        })()
-      : // Dev needs inline + eval for HMR; API responses are JSON only.
-        undefined;
+  // Pages are STATICALLY prerendered (fast, and required for the Tauri
+  // desktop export), so a nonce-based strict CSP is impossible: prebuilt
+  // HTML cannot carry a per-request nonce and 'strict-dynamic' would block
+  // every script — React would never hydrate and the page would be inert
+  // (verified by the automated browser E2E test). The policy below keeps
+  // every structural restriction (no framing, no objects, no base hijack,
+  // no cross-origin forms) while allowing only first-party and inline
+  // bootstrap scripts. XSS defense-in-depth is provided by React
+  // auto-escaping + zod validation + no dangerouslySetInnerHTML (see
+  // SECURITY.md). API responses keep a fully locked-down CSP.
+  const pageCsp = [
+    `default-src 'self'`,
+    `script-src 'self' 'unsafe-inline'`,
+    `style-src 'self' 'unsafe-inline'`,
+    `img-src 'self' data: blob:`,
+    `font-src 'self' data:`,
+    `connect-src 'self'`,
+    `object-src 'none'`,
+    `base-uri 'self'`,
+    `form-action 'self'`,
+    `frame-ancestors 'none'`,
+  ].join("; ");
 
-  const requestHeaders = new Headers(request.headers);
-  if (cspHeader) {
-    const nonce = btoa(crypto.randomUUID());
-    requestHeaders.set("x-nonce", nonce);
-    requestHeaders.set("Content-Security-Policy", cspHeader);
-  }
-
-  const response = NextResponse.next({ request: { headers: requestHeaders } });
+  const response = NextResponse.next({ request });
 
   if (isApi) {
     // JSON endpoints never host active content.
@@ -166,8 +160,9 @@ export function middleware(request: NextRequest) {
       "Content-Security-Policy",
       "default-src 'none'; frame-ancestors 'none'",
     );
-  } else if (cspHeader) {
-    response.headers.set("Content-Security-Policy", cspHeader);
+  } else if (process.env.NODE_ENV === "production") {
+    // Dev needs inline + eval for HMR, so the page CSP is production-only.
+    response.headers.set("Content-Security-Policy", pageCsp);
   }
 
   return baseSecurityHeaders(response);

@@ -2,6 +2,10 @@
 //!
 //! Every command validates its inputs through the core before touching the
 //! database; errors cross the IPC boundary as `{ code, message }` objects.
+//! Responses use the EXACT JSON shapes of the web API (`src/app/api/*`), so
+//! the existing React frontend runs unchanged against either backend — see
+//! `crates/finances-core/src/view.rs`.
+//!
 //! The SQLite database lives in the OS application-data directory
 //! (`app_data_dir/household-finances/data.sqlite` — platform-specific:
 //! `%APPDATA%` on Windows, `~/Library/Application Support` on macOS,
@@ -12,12 +16,9 @@ use std::sync::Mutex;
 use finances_core::backup::{export_backup, export_csv, import_backup, RestoreReport};
 use finances_core::error::{AppError, Result};
 use finances_core::migrate::{migrate_legacy, MigrationReport};
-use finances_core::model::{
-    current_month_key, Expense, ExpensePatch, Income, IncomeUpsert, NewExpense,
-};
-use finances_core::repo::{self, HouseholdSummary};
+use finances_core::model::{current_month_key, ExpensePatch, IncomeUpsert, NewExpense};
 use finances_core::validation::{Kind, Person, Responsible};
-use finances_core::Store;
+use finances_core::{repo, view, Store};
 use serde::{Deserialize, Serialize};
 use tauri::{Manager, State};
 
@@ -36,16 +37,6 @@ where
     D: serde::Deserializer<'de>,
 {
     Deserialize::deserialize(de).map(Some)
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct MonthPayload {
-    month: String,
-    expenses: Vec<Expense>,
-    incomes: Vec<Income>,
-    available_months: Vec<String>,
-    summary: HouseholdSummary,
 }
 
 #[derive(Deserialize)]
@@ -105,10 +96,7 @@ struct AppInfo {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-fn with_store<T>(
-    state: &State<AppState>,
-    f: impl FnOnce(&Store) -> Result<T>,
-) -> Result<T> {
+fn with_store<T>(state: &State<AppState>, f: impl FnOnce(&Store) -> Result<T>) -> Result<T> {
     let guard = state
         .store
         .lock()
@@ -124,35 +112,51 @@ fn parse_responsible(s: Option<&str>) -> Result<Responsible> {
     Responsible::parse(s.unwrap_or("shared"))
 }
 
+fn month_or_current(m: Option<&str>) -> Result<String> {
+    match m {
+        Some(m) if !m.is_empty() => finances_core::validation::parse_month(m),
+        _ => Ok(current_month_key()),
+    }
+}
+
 // ─── Commands ────────────────────────────────────────────────────────────────
 
+/// Mirror of `GET /api/finance?month=` — identical JSON shape (web parity).
 #[tauri::command]
-fn get_month_data(state: State<AppState>, month: Option<String>) -> Result<MonthPayload> {
-    let month = match month.as_deref() {
-        Some(m) if !m.is_empty() => validation_month(m)?,
-        _ => current_month_key(),
-    };
+fn get_month_data(state: State<AppState>, month: Option<String>) -> Result<view::MonthDataView> {
+    let month = month_or_current(month.as_deref())?;
     with_store(&state, |store| {
-        Ok(MonthPayload {
-            available_months: repo::available_months(&store.conn)?,
-            expenses: repo::list_expenses_by_month(&store.conn, &month)?,
-            incomes: repo::list_incomes_by_month(&store.conn, &month)?,
-            summary: {
-                let expenses = repo::list_expenses_by_month(&store.conn, &month)?;
-                let incomes = repo::list_incomes_by_month(&store.conn, &month)?;
-                repo::compute_summary(&expenses, &incomes, &finances_core::model::today_iso())
-            },
+        // Single fetch per table — reused for both the lists and the summary
+        // (this command used to query each table twice).
+        let expenses = repo::list_expenses_by_month(&store.conn, &month)?;
+        let incomes = repo::list_incomes_by_month(&store.conn, &month)?;
+        let mut months = repo::available_months(&store.conn)?;
+        // Web parity: the current month is always offered in the month
+        // picker, even with no data yet.
+        let current = current_month_key();
+        if !months.contains(&current) {
+            months.push(current);
+            months.sort();
+        }
+        let summary =
+            repo::compute_summary(&expenses, &incomes, &finances_core::model::today_iso());
+        Ok(view::MonthDataView {
             month,
+            available_months: months,
+            incomes: incomes.iter().map(view::IncomeView::from).collect(),
+            expenses: expenses.iter().map(view::ExpenseView::from).collect(),
+            summary: view::SummaryView::from(&summary),
+            meta: view::MetaView {
+                today: finances_core::model::today_iso(),
+            },
         })
     })
 }
 
-fn validation_month(m: &str) -> Result<String> {
-    finances_core::validation::parse_month(m)
-}
-
+/// Mirror of `POST /api/expenses` — returns the created expense in the web
+/// API shape (`{ expense: … }`).
 #[tauri::command]
-fn create_expense(state: State<AppState>, input: ExpenseInput) -> Result<Expense> {
+fn create_expense(state: State<AppState>, input: ExpenseInput) -> Result<serde_json::Value> {
     let responsible = parse_responsible(input.responsible.as_deref())?;
     let kind = parse_kind(input.kind.as_deref())?;
     let new = NewExpense {
@@ -167,33 +171,31 @@ fn create_expense(state: State<AppState>, input: ExpenseInput) -> Result<Expense
         due_date: input.due_date,
         paid: input.paid.unwrap_or(false),
         notes: input.notes,
-        month: match input.month.as_deref() {
-            Some(m) if !m.is_empty() => validation_month(m)?,
-            _ => current_month_key(),
-        },
+        month: month_or_current(input.month.as_deref())?,
     };
     let validated = repo::validate_new_expense(&new)?;
-    with_store(&state, |store| repo::insert_expense(&store.conn, &validated))
+    let created = with_store(&state, |store| {
+        repo::insert_expense(&store.conn, &validated)
+    })?;
+    Ok(serde_json::json!({ "expense": view::ExpenseView::from(&created) }))
 }
 
+/// Mirror of `PATCH /api/expenses/[id]` — returns `{ expense: … }` or
+/// `{ error: "Expense not found" }`-equivalent NotFound error.
 #[tauri::command]
 fn update_expense(
     state: State<AppState>,
     id: String,
     patch: ExpensePatchInput,
-) -> Result<Option<Expense>> {
+) -> Result<serde_json::Value> {
     let p = ExpensePatch {
         name: patch.name,
         amount_cents: patch.amount.map(finances_core::money::euros_to_cents),
-        kind: patch
-            .kind
-            .as_deref()
-            .map(|s| Kind::parse(s))
-            .transpose()?,
+        kind: patch.kind.as_deref().map(Kind::parse).transpose()?,
         responsible: patch
             .responsible
             .as_deref()
-            .map(|s| Responsible::parse(s))
+            .map(Responsible::parse)
             .transpose()?,
         category: patch.category,
         joao_share: patch.joao_share,
@@ -207,26 +209,37 @@ fn update_expense(
         notes: patch.notes,
         paid: patch.paid,
     };
-    with_store(&state, |store| repo::update_expense(&store.conn, &id, &p))
+    let updated = with_store(&state, |store| repo::update_expense(&store.conn, &id, &p))?;
+    match updated {
+        Some(e) => Ok(serde_json::json!({ "expense": view::ExpenseView::from(&e) })),
+        // Web parity: PATCH of an unknown id yields 404 "Expense not found".
+        None => Err(AppError::NotFound("Expense not found".into())),
+    }
 }
 
+/// Mirror of `DELETE /api/expenses/[id]` — returns `{ ok: true }`; deleting
+/// an unknown id yields NotFound (web parity with the 404 response).
 #[tauri::command]
-fn delete_expense(state: State<AppState>, id: String) -> Result<bool> {
-    with_store(&state, |store| repo::delete_expense(&store.conn, &id))
+fn delete_expense(state: State<AppState>, id: String) -> Result<serde_json::Value> {
+    let existed = with_store(&state, |store| repo::delete_expense(&store.conn, &id))?;
+    if existed {
+        Ok(serde_json::json!({ "ok": true }))
+    } else {
+        Err(AppError::NotFound("Expense not found".into()))
+    }
 }
 
+/// Mirror of `POST /api/income` — returns `{ income: … }` (web shape).
 #[tauri::command]
-fn save_income(state: State<AppState>, input: IncomeInput) -> Result<Income> {
+fn save_income(state: State<AppState>, input: IncomeInput) -> Result<serde_json::Value> {
     let upsert = IncomeUpsert {
         person: Person::parse(&input.person)?,
-        month: match input.month.as_deref() {
-            Some(m) if !m.is_empty() => validation_month(m)?,
-            _ => current_month_key(),
-        },
+        month: month_or_current(input.month.as_deref())?,
         salary_cents: input.amount.map(finances_core::money::euros_to_cents),
         meal_card_cents: input.meal_card.map(finances_core::money::euros_to_cents),
     };
-    with_store(&state, |store| repo::upsert_income(&store.conn, &upsert))
+    let saved = with_store(&state, |store| repo::upsert_income(&store.conn, &upsert))?;
+    Ok(serde_json::json!({ "income": view::IncomeView::from(&saved) }))
 }
 
 #[tauri::command]
@@ -248,13 +261,9 @@ fn import_backup_cmd(
 }
 
 #[tauri::command]
-fn export_csv_cmd(
-    state: State<AppState>,
-    path: String,
-    month: Option<String>,
-) -> Result<usize> {
+fn export_csv_cmd(state: State<AppState>, path: String, month: Option<String>) -> Result<usize> {
     let month = match month.as_deref() {
-        Some(m) if !m.is_empty() => Some(validation_month(m)?),
+        Some(m) if !m.is_empty() => Some(finances_core::validation::parse_month(m)?),
         _ => None,
     };
     with_store(&state, |store| {
@@ -292,7 +301,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             // Native application menu (File / Edit / View / Window / Help).
-            let menu = tauri::menu::Menu::default(app)?;
+            let menu = tauri::menu::Menu::default(app.handle())?;
             app.set_menu(menu)?;
 
             // Database in the OS application-data directory.

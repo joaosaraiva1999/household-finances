@@ -34,6 +34,7 @@ pub mod model;
 pub mod money;
 pub mod repo;
 pub mod validation;
+pub mod view;
 pub mod xml;
 
 pub use db::Store;

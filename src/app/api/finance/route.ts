@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import {
+  compareExpenseOrder,
   computeSummary,
   currentMonthKey,
-  toMonthKey,
   type ExpenseRecord,
   type IncomeRecord,
   type Person,
@@ -55,12 +55,7 @@ export async function GET(request: NextRequest) {
         notes: e.notes,
         month: e.month,
       }))
-      .sort((a, b) => {
-        if (a.dueDate && b.dueDate) return a.dueDate < b.dueDate ? -1 : 1;
-        if (a.dueDate) return -1;
-        if (b.dueDate) return 1;
-        return a.name.localeCompare(b.name);
-      });
+      .sort(compareExpenseOrder);
 
     const dataMonths = new Set<string>([
       ...incomeMonths.map((m) => m.month),
@@ -75,7 +70,8 @@ export async function GET(request: NextRequest) {
       expenses: expenseRecords,
       availableMonths,
       summary: computeSummary(expenseRecords, incomeRecords),
-      meta: { today: toMonthKey(new Date()) },
+      // Full UTC date (YYYY-MM-DD) — matches the desktop payload exactly.
+      meta: { today: new Date().toISOString().slice(0, 10) },
     });
   } catch (error) {
     console.error("GET /api/finance failed:", error);

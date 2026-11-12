@@ -31,14 +31,8 @@ pub struct MigrationReport {
 }
 
 /// Migrate a legacy Prisma SQLite file into the (already open) store.
-pub fn migrate_legacy(
-    store: &Store,
-    legacy_path: &Path,
-    force: bool,
-) -> Result<MigrationReport> {
-    if !force
-        && (repo::count_expenses(&store.conn)? > 0 || repo::count_incomes(&store.conn)? > 0)
-    {
+pub fn migrate_legacy(store: &Store, legacy_path: &Path, force: bool) -> Result<MigrationReport> {
+    if !force && (repo::count_expenses(&store.conn)? > 0 || repo::count_incomes(&store.conn)? > 0) {
         return Err(AppError::TargetNotEmpty);
     }
 
@@ -84,7 +78,9 @@ pub fn migrate_legacy(
 
 /// `responsible` in the current schema; older builds used `owner`.
 fn column_of(legacy: &rusqlite::Connection, table: &str, candidates: &[&str]) -> Option<String> {
-    let mut stmt = legacy.prepare(&format!("PRAGMA table_info({table})")).ok()?;
+    let mut stmt = legacy
+        .prepare(&format!("PRAGMA table_info({table})"))
+        .ok()?;
     let cols: Vec<String> = stmt
         .query_map([], |r| r.get::<_, String>(1))
         .ok()?
@@ -120,8 +116,10 @@ fn read_legacy_expenses(
     legacy: &rusqlite::Connection,
     warnings: &mut Vec<String>,
 ) -> Result<Vec<Expense>> {
-    let responsible_col = column_of(legacy, "Expense", &["responsible", "owner"])
-        .ok_or_else(|| AppError::Validation("Legacy Expense table has no responsible/owner column".into()))?;
+    let responsible_col =
+        column_of(legacy, "Expense", &["responsible", "owner"]).ok_or_else(|| {
+            AppError::Validation("Legacy Expense table has no responsible/owner column".into())
+        })?;
     // Column names come from PRAGMA (schema constants), never user data.
     let sql = format!(
         "SELECT id, name, amount, kind, category, {responsible_col}, joaoShare, \
@@ -134,9 +132,15 @@ fn read_legacy_expenses(
             id: r.get(0)?,
             name: r.get(1)?,
             amount: r.get::<_, Option<f64>>(2)?.unwrap_or(0.0),
-            kind: r.get::<_, Option<String>>(3)?.unwrap_or_else(|| "expense".into()),
-            category: r.get::<_, Option<String>>(4)?.unwrap_or_else(|| "Other".into()),
-            responsible: r.get::<_, Option<String>>(5)?.unwrap_or_else(|| "shared".into()),
+            kind: r
+                .get::<_, Option<String>>(3)?
+                .unwrap_or_else(|| "expense".into()),
+            category: r
+                .get::<_, Option<String>>(4)?
+                .unwrap_or_else(|| "Other".into()),
+            responsible: r
+                .get::<_, Option<String>>(5)?
+                .unwrap_or_else(|| "shared".into()),
             joao_share: r.get::<_, Option<f64>>(6)?.unwrap_or(50.0),
             joao_paid: r.get::<_, Option<Option<f64>>>(7)?.flatten(),
             anna_paid: r.get::<_, Option<Option<f64>>>(8)?.flatten(),
@@ -206,7 +210,10 @@ fn convert_expense(l: LegacyExpense, index: usize, warnings: &mut Vec<String>) -
     let responsible = match Responsible::parse(l.responsible.trim()) {
         Ok(r) => r,
         Err(_) => {
-            warn(format!("unknown responsible {:?} → \"shared\"", l.responsible));
+            warn(format!(
+                "unknown responsible {:?} → \"shared\"",
+                l.responsible
+            ));
             Responsible::Shared
         }
     };
@@ -217,13 +224,16 @@ fn convert_expense(l: LegacyExpense, index: usize, warnings: &mut Vec<String>) -
             "1970-01".to_string()
         }
     };
-    let due_date = l.due_date.as_deref().and_then(|d| match validation::parse_due_date(d.trim()) {
-        Ok(x) => Some(x),
-        Err(_) => {
-            warn(format!("invalid due date {d:?} → cleared"));
-            None
-        }
-    });
+    let due_date = l
+        .due_date
+        .as_deref()
+        .and_then(|d| match validation::parse_due_date(d.trim()) {
+            Ok(x) => Some(x),
+            Err(_) => {
+                warn(format!("invalid due date {d:?} → cleared"));
+                None
+            }
+        });
     let joao_share = validation::validate_share(l.joao_share).unwrap_or_else(|_| {
         warn(format!("invalid joaoShare {} → 50", l.joao_share));
         50.0

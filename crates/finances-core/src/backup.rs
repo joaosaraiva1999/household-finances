@@ -121,8 +121,7 @@ pub fn import_backup(
     .into_iter()
     .enumerate()
     .map(|(i, v)| {
-        parse_expense_record(&v)
-            .map_err(|e| AppError::Validation(format!("Expense #{i}: {e}")))
+        parse_expense_record(&v).map_err(|e| AppError::Validation(format!("Expense #{i}: {e}")))
     })
     .collect::<Result<Vec<_>>>()?;
     let incomes: Vec<Income> = serde_json::from_value::<Vec<serde_json::Value>>(
@@ -134,8 +133,7 @@ pub fn import_backup(
     .into_iter()
     .enumerate()
     .map(|(i, v)| {
-        parse_income_record(&v)
-            .map_err(|e| AppError::Validation(format!("Income #{i}: {e}")))
+        parse_income_record(&v).map_err(|e| AppError::Validation(format!("Income #{i}: {e}")))
     })
     .collect::<Result<Vec<_>>>()?;
 
@@ -192,8 +190,7 @@ fn parse_expense_record(v: &serde_json::Value) -> std::result::Result<Expense, S
     let amount_cents = validation::validate_expense_cents(get_i64(v, "amountCents")?)
         .map_err(|e| e.to_string())?;
     let kind = Kind::parse(&get_str(v, "kind")?).map_err(|e| e.to_string())?;
-    let responsible =
-        Responsible::parse(&get_str(v, "responsible")?).map_err(|e| e.to_string())?;
+    let responsible = Responsible::parse(&get_str(v, "responsible")?).map_err(|e| e.to_string())?;
     let joao_share =
         validation::validate_share(v.get("joaoShare").and_then(|x| x.as_f64()).unwrap_or(50.0))
             .map_err(|e| e.to_string())?;
@@ -233,8 +230,8 @@ fn parse_income_record(v: &serde_json::Value) -> std::result::Result<Income, Str
     let id = validation::parse_id(&get_str(v, "id")?).map_err(|e| e.to_string())?;
     let person = Person::parse(&get_str(v, "person")?).map_err(|e| e.to_string())?;
     let month = validation::parse_month(&get_str(v, "month")?).map_err(|e| e.to_string())?;
-    let salary_cents = validation::validate_income_cents(get_i64(v, "salaryCents")?)
-        .map_err(|e| e.to_string())?;
+    let salary_cents =
+        validation::validate_income_cents(get_i64(v, "salaryCents")?).map_err(|e| e.to_string())?;
     let meal_card_cents = validation::validate_income_cents(get_i64(v, "mealCardCents")?)
         .map_err(|e| e.to_string())?;
     Ok(Income {
@@ -250,19 +247,25 @@ fn parse_income_record(v: &serde_json::Value) -> std::result::Result<Income, Str
 
 /// CSV export helper — every text cell goes through the formula-injection
 /// sanitizer (`csv::sanitize_cell`).
-pub fn export_csv(
-    store: &Store,
-    path: &std::path::Path,
-    month: Option<&str>,
-) -> Result<usize> {
+pub fn export_csv(store: &Store, path: &std::path::Path, month: Option<&str>) -> Result<usize> {
     let expenses = match month {
         Some(m) => repo::list_expenses_by_month(&store.conn, m)?,
         None => repo::list_all_expenses(&store.conn)?,
     };
 
     let header = [
-        "Month", "Name", "Amount", "Type", "Category", "Responsible",
-        "João share %", "João paid", "Anna paid", "Due date", "Paid", "Notes",
+        "Month",
+        "Name",
+        "Amount",
+        "Type",
+        "Category",
+        "Responsible",
+        "João share %",
+        "João paid",
+        "Anna paid",
+        "Due date",
+        "Paid",
+        "Notes",
     ];
     let mut rows: Vec<Vec<String>> = Vec::with_capacity(expenses.len());
     for e in &expenses {

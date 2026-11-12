@@ -110,6 +110,10 @@ export function dueDateLabel(dueDate: string, locale = "en-GB"): string {
 /**
  * Parse a user-typed monetary amount, tolerant of both English
  * ("1,234.56") and Portuguese ("1.234,56") conventions.
+ *
+ * Strict on purpose (mirrors `parse_amount_input` in the Rust core):
+ * `parseFloat` alone silently accepts "12;5" → 12, "1e9" → 1e9 and
+ * "1.2.3.4" → 1.2, storing an amount the user never typed.
  */
 export function parseAmountInput(raw: string): number {
   let s = raw.replace(/[€\s]/g, "");
@@ -124,6 +128,8 @@ export function parseAmountInput(raw: string): number {
     // Comma only: thousands groups ("1,234,567") vs decimal ("1234,5").
     s = /^-?\d{1,3}(,\d{3})+$/.test(s) ? s.replace(/,/g, "") : s.replace(",", ".");
   }
+  // Only a plain (optionally signed) decimal number survives.
+  if (!/^[+-]?(\d+(\.\d*)?|\.\d+)$/.test(s)) return NaN;
   const value = Number.parseFloat(s);
   return Number.isFinite(value) ? value : NaN;
 }
@@ -158,6 +164,11 @@ export function round2(value: number): number {
  * amounts each person paid when present (e.g. a €900 bill where person 1
  * paid €400 puts €400 on person 1 and €500 on person 2), otherwise the
  * split percentage applies (default 50/50, customizable).
+ *
+ * The percentage path rounds in INTEGER CENTS (exactly like the Rust core):
+ * `round2(amount * share / 100)` in pure floats silently drifts — e.g.
+ * 45.90 × 25% is 11.474999… as a double, rounding to 11.47, while the
+ * cent-exact value 1147.5 must round half-up to 11.48.
  */
 export function personShare(expense: ExpenseRecord, person: Person): number {
   if (expense.responsible === person) return expense.amount;
@@ -170,7 +181,8 @@ export function personShare(expense: ExpenseRecord, person: Person): number {
       return person === "joao" ? expense.joaoPaid : expense.annaPaid;
     }
     const share = person === "joao" ? expense.joaoShare : 100 - expense.joaoShare;
-    return round2((expense.amount * share) / 100);
+    const cents = Math.round(expense.amount * 100);
+    return Math.round((cents * share) / 100) / 100;
   }
   return 0;
 }
@@ -300,9 +312,7 @@ export function computeSummary(
 
   const bills = expenses.filter((e) => e.kind === "expense");
   const unpaid = bills.filter((e) => !e.paid);
-  const withDue = unpaid
-    .filter((e) => e.dueDate)
-    .sort((a, b) => (a.dueDate! < b.dueDate! ? -1 : 1));
+  const withDue = unpaid.filter((e) => e.dueDate).sort(compareExpenseOrder);
 
   return {
     joao,
@@ -321,6 +331,25 @@ export function computeSummary(
 }
 
 // ─── API helpers ──────────────────────────────────────────────────────────────
+
+/**
+ * Deterministic list ordering used everywhere expenses are displayed:
+ * due date first (earliest first, missing last), then name case-insensitively.
+ *
+ * Total order on purpose — the previous comparators returned `1` for equal
+ * values (both for (a,b) and (b,a)), leaving the result engine-dependent.
+ * Mirrors the Rust core: `ORDER BY (due_date IS NULL), due_date, name COLLATE NOCASE`.
+ */
+export function compareExpenseOrder(a: ExpenseRecord, b: ExpenseRecord): number {
+  if (a.dueDate && b.dueDate && a.dueDate !== b.dueDate) {
+    return a.dueDate < b.dueDate ? -1 : 1;
+  }
+  if (a.dueDate && !b.dueDate) return -1;
+  if (!a.dueDate && b.dueDate) return 1;
+  const x = a.name.toLowerCase();
+  const y = b.name.toLowerCase();
+  return x < y ? -1 : x > y ? 1 : 0;
+}
 
 export function currentMonthKey(): string {
   const now = new Date();

@@ -1,0 +1,66 @@
+{
+  "comment": "Cross-version parity fixtures — identical input for the web API (Next.js + Prisma) and the Rust core (finances-core). The parity test compares the full summary JSON and the displayed expense order between both implementations.",
+  "today": "2026-11-13",
+  "scenarios": [
+    {
+      "name": "percentage_splits",
+      "month": "2026-11",
+      "incomes": [
+        { "person": "joao", "amount": 2000, "mealCard": 50 },
+        { "person": "anna", "amount": 1800, "mealCard": 0 }
+      ],
+      "expenses": [
+        { "name": "Rent", "amount": 800, "kind": "expense", "category": "Housing", "responsible": "shared", "joaoShare": 50, "joaoPaid": null, "annaPaid": null, "dueDate": "2026-10-01", "paid": false, "notes": null },
+        { "name": "Internet", "amount": 45.9, "kind": "expense", "category": "Internet & Phone", "responsible": "shared", "joaoShare": 25, "joaoPaid": null, "annaPaid": null, "dueDate": "2026-10-05", "paid": true, "notes": "fibra" },
+        { "name": "Gym", "amount": 50, "kind": "expense", "category": "Health", "responsible": "joao", "joaoShare": 100, "joaoPaid": null, "annaPaid": null, "dueDate": null, "paid": false, "notes": null }
+      ]
+    },
+    {
+      "name": "exact_paid_split",
+      "month": "2026-11",
+      "incomes": [
+        { "person": "joao", "amount": 1500, "mealCard": 0 },
+        { "person": "anna", "amount": 1500, "mealCard": 0 }
+      ],
+      "expenses": [
+        { "name": "Supermarket run", "amount": 900, "kind": "expense", "category": "Groceries", "responsible": "shared", "joaoShare": 50, "joaoPaid": 400, "annaPaid": null, "dueDate": "2026-10-10", "paid": false, "notes": "joão paid at the till" },
+        { "name": "Third-party cover", "amount": 33.33, "kind": "expense", "category": "Other", "responsible": "shared", "joaoShare": 50, "joaoPaid": null, "annaPaid": 10, "dueDate": "2026-10-11", "paid": false, "notes": null }
+      ]
+    },
+    {
+      "name": "credits_and_unpaid_occupy_balance",
+      "month": "2026-10",
+      "incomes": [
+        { "person": "joao", "amount": 800, "mealCard": 0 },
+        { "person": "anna", "amount": 700, "mealCard": 45.5 }
+      ],
+      "expenses": [
+        { "name": "Meal card top-up", "amount": 100, "kind": "credit", "category": "Other", "responsible": "shared", "joaoShare": 50, "joaoPaid": null, "annaPaid": null, "dueDate": null, "paid": true, "notes": null },
+        { "name": "Bonus", "amount": 250, "kind": "credit", "category": "Other", "responsible": "joao", "joaoShare": 100, "joaoPaid": null, "annaPaid": null, "dueDate": null, "paid": false, "notes": "yearly" },
+        { "name": "Electricity", "amount": 120.35, "kind": "expense", "category": "Utilities", "responsible": "shared", "joaoShare": 50, "joaoPaid": 70.5, "annaPaid": null, "dueDate": "2026-09-20", "paid": false, "notes": null },
+        { "name": "Water", "amount": 30.1, "kind": "expense", "category": "Utilities", "responsible": "anna", "joaoShare": 0, "joaoPaid": null, "annaPaid": null, "dueDate": "2026-09-25", "paid": true, "notes": null }
+      ]
+    },
+    {
+      "name": "rounding_edges",
+      "month": "2026-11",
+      "incomes": [],
+      "expenses": [
+        { "name": "Coffee", "amount": 0.05, "kind": "expense", "category": "Other", "responsible": "shared", "joaoShare": 33.3, "joaoPaid": null, "annaPaid": null, "dueDate": null, "paid": false, "notes": null },
+        { "name": "Snack", "amount": 10.05, "kind": "expense", "category": "Other", "responsible": "shared", "joaoShare": 33.3, "joaoPaid": null, "annaPaid": null, "dueDate": null, "paid": false, "notes": null },
+        { "name": "Odd split", "amount": 100, "kind": "expense", "category": "Other", "responsible": "shared", "joaoShare": 66.7, "joaoPaid": null, "annaPaid": null, "dueDate": null, "paid": false, "notes": null }
+      ]
+    },
+    {
+      "name": "display_ordering",
+      "month": "2026-11",
+      "incomes": [],
+      "expenses": [
+        { "name": "zeta no date", "amount": 10, "kind": "expense", "category": "Other", "responsible": "shared", "joaoShare": 50, "joaoPaid": null, "annaPaid": null, "dueDate": null, "paid": false, "notes": null },
+        { "name": "Zé same day", "amount": 10, "kind": "expense", "category": "Other", "responsible": "shared", "joaoShare": 50, "joaoPaid": null, "annaPaid": null, "dueDate": "2026-11-15", "paid": false, "notes": null },
+        { "name": "ana same day", "amount": 10, "kind": "expense", "category": "Other", "responsible": "shared", "joaoShare": 50, "joaoPaid": null, "annaPaid": null, "dueDate": "2026-11-15", "paid": false, "notes": null },
+        { "name": "early date", "amount": 10, "kind": "expense", "category": "Other", "responsible": "shared", "joaoShare": 50, "joaoPaid": null, "annaPaid": null, "dueDate": "2026-11-02", "paid": false, "notes": null }
+      ]
+    }
+  ]
+}

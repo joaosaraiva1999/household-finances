@@ -110,9 +110,9 @@ impl Store {
     }
 
     fn configure(&self) -> Result<()> {
-        self.conn.busy_timeout(std::time::Duration::from_millis(5_000))?;
         self.conn
-            .pragma_update(None, "journal_mode", "WAL")?;
+            .busy_timeout(std::time::Duration::from_millis(5_000))?;
+        self.conn.pragma_update(None, "journal_mode", "WAL")?;
         self.conn.pragma_update(None, "foreign_keys", "ON")?;
         self.conn.pragma_update(None, "synchronous", "NORMAL")?;
         // Never read plain-text content back as a different type than stored.
@@ -122,18 +122,17 @@ impl Store {
 
     /// Apply pending migrations, each in its own transaction.
     pub fn run_migrations(&self) -> Result<()> {
-        let current: i64 = self
-            .conn
-            .query_row("SELECT user_version FROM pragma_user_version", [], |r| {
-                r.get(0)
-            })?;
+        let current: i64 =
+            self.conn
+                .query_row("SELECT user_version FROM pragma_user_version", [], |r| {
+                    r.get(0)
+                })?;
         for &(version, sql) in MIGRATIONS {
             if version <= current {
                 continue;
             }
             let tx = self.conn.unchecked_transaction()?;
-            tx.execute_batch(sql)
-                .map_err(|e| AppError::Db(e))?;
+            tx.execute_batch(sql).map_err(AppError::Db)?;
             tx.pragma_update(None, "user_version", version)?;
             tx.commit()?;
         }
@@ -213,7 +212,9 @@ mod tests {
         store.run_migrations().unwrap(); // second call: no-op
         let v: i64 = store
             .conn
-            .query_row("SELECT user_version FROM pragma_user_version", [], |r| r.get(0))
+            .query_row("SELECT user_version FROM pragma_user_version", [], |r| {
+                r.get(0)
+            })
             .unwrap();
         assert_eq!(v, 1);
     }

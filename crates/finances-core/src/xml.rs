@@ -69,10 +69,7 @@ mod tests {
         let payload = r#"" onmouseover="alert(1)" x=""#;
         let out = escape_attr(payload);
         assert!(!out.contains('"'), "raw double quote survived: {out}");
-        assert_eq!(
-            out,
-            "&quot; onmouseover=&quot;alert(1)&quot; x=&quot;"
-        );
+        assert_eq!(out, "&quot; onmouseover=&quot;alert(1)&quot; x=&quot;");
         let single = escape_attr("' onclick='evil");
         assert!(!single.contains('\''));
         assert!(single.contains("&apos;"));
@@ -100,7 +97,10 @@ mod tests {
             "attribute not fully escaped: {doc}"
         );
         // Text: same escaping minus quotes.
-        assert!(doc.ends_with("](&gt;&lt;)&amp;\"'</note>"), "text wrong: {doc}");
+        assert!(
+            doc.ends_with("](&gt;&lt;)&amp;\"'</note>"),
+            "text wrong: {doc}"
+        );
         // The raw payload never appears unescaped in the document.
         assert!(!doc.contains("><)"));
         assert!(!doc.contains("&\"'"));

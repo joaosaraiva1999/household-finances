@@ -6,6 +6,7 @@ use finances_core::model::{Expense, Income, NewExpense};
 use finances_core::repo::{compute_summary, days_until, person_share_cents};
 use finances_core::validation::{Kind, Person, Responsible};
 
+#[allow(clippy::too_many_arguments)]
 fn expense(
     name: &str,
     amount_cents: i64,
@@ -68,7 +69,17 @@ fn income(person: Person, salary: i64, meal: i64) -> Income {
 #[test]
 fn exact_paid_split_is_honoured() {
     // €900 rent, João paid €400 → João 400, Anna 500 (the €500 remainder).
-    let e = to_expense(expense("Rent", 90_000, Kind::Expense, Responsible::Shared, 50.0, Some(40_000), Some(50_000), false, None));
+    let e = to_expense(expense(
+        "Rent",
+        90_000,
+        Kind::Expense,
+        Responsible::Shared,
+        50.0,
+        Some(40_000),
+        Some(50_000),
+        false,
+        None,
+    ));
     assert_eq!(person_share_cents(&e, Person::Joao), 40_000);
     assert_eq!(person_share_cents(&e, Person::Anna), 50_000);
 }
@@ -76,19 +87,49 @@ fn exact_paid_split_is_honoured() {
 #[test]
 fn percentage_split_matches_web_rounding() {
     // 25% of €900 → round2(900 * 0.25) = 225.00
-    let e = to_expense(expense("Rent", 90_000, Kind::Expense, Responsible::Shared, 25.0, None, None, false, None));
+    let e = to_expense(expense(
+        "Rent",
+        90_000,
+        Kind::Expense,
+        Responsible::Shared,
+        25.0,
+        None,
+        None,
+        false,
+        None,
+    ));
     assert_eq!(person_share_cents(&e, Person::Joao), 22_500);
     assert_eq!(person_share_cents(&e, Person::Anna), 67_500);
 
     // 33.3% of €100 → 33.30 / 66.70
-    let e2 = to_expense(expense("X", 10_000, Kind::Expense, Responsible::Shared, 33.3, None, None, false, None));
+    let e2 = to_expense(expense(
+        "X",
+        10_000,
+        Kind::Expense,
+        Responsible::Shared,
+        33.3,
+        None,
+        None,
+        false,
+        None,
+    ));
     assert_eq!(person_share_cents(&e2, Person::Joao), 3_330);
     assert_eq!(person_share_cents(&e2, Person::Anna), 6_670);
 }
 
 #[test]
 fn personal_expenses_belong_to_one_person() {
-    let joao_only = to_expense(expense("Gym", 5_000, Kind::Expense, Responsible::Joao, 50.0, None, None, false, None));
+    let joao_only = to_expense(expense(
+        "Gym",
+        5_000,
+        Kind::Expense,
+        Responsible::Joao,
+        50.0,
+        None,
+        None,
+        false,
+        None,
+    ));
     assert_eq!(person_share_cents(&joao_only, Person::Joao), 5_000);
     assert_eq!(person_share_cents(&joao_only, Person::Anna), 0);
 }
@@ -96,8 +137,28 @@ fn personal_expenses_belong_to_one_person() {
 #[test]
 fn unpaid_bills_still_occupy_the_balance() {
     let expenses = vec![
-        to_expense(expense("Rent", 80_000, Kind::Expense, Responsible::Shared, 50.0, None, None, false, None)),
-        to_expense(expense("Gym", 5_000, Kind::Expense, Responsible::Joao, 50.0, None, None, false, None)),
+        to_expense(expense(
+            "Rent",
+            80_000,
+            Kind::Expense,
+            Responsible::Shared,
+            50.0,
+            None,
+            None,
+            false,
+            None,
+        )),
+        to_expense(expense(
+            "Gym",
+            5_000,
+            Kind::Expense,
+            Responsible::Joao,
+            50.0,
+            None,
+            None,
+            false,
+            None,
+        )),
     ];
     let incomes = vec![
         income(Person::Joao, 200_000, 5_000),
@@ -121,8 +182,28 @@ fn unpaid_bills_still_occupy_the_balance() {
 #[test]
 fn credits_add_to_income_not_expenses() {
     let expenses = vec![
-        to_expense(expense("Meal card top-up", 10_000, Kind::Credit, Responsible::Joao, 50.0, None, None, false, None)),
-        to_expense(expense("Coffee", 2_000, Kind::Expense, Responsible::Joao, 50.0, None, None, false, None)),
+        to_expense(expense(
+            "Meal card top-up",
+            10_000,
+            Kind::Credit,
+            Responsible::Joao,
+            50.0,
+            None,
+            None,
+            false,
+            None,
+        )),
+        to_expense(expense(
+            "Coffee",
+            2_000,
+            Kind::Expense,
+            Responsible::Joao,
+            50.0,
+            None,
+            None,
+            false,
+            None,
+        )),
     ];
     let summary = compute_summary(&expenses, &[], "2026-11-13");
     assert_eq!(summary.joao.credits_cents, 10_000);
@@ -136,7 +217,17 @@ fn credits_add_to_income_not_expenses() {
 #[test]
 fn committed_pct_is_capped_like_the_web() {
     // income 100, expenses 500 → ratio 500% → capped at 200.
-    let expenses = vec![to_expense(expense("Huge", 50_000, Kind::Expense, Responsible::Joao, 50.0, None, None, false, None))];
+    let expenses = vec![to_expense(expense(
+        "Huge",
+        50_000,
+        Kind::Expense,
+        Responsible::Joao,
+        50.0,
+        None,
+        None,
+        false,
+        None,
+    ))];
     let incomes = vec![income(Person::Joao, 10_000, 0)];
     let summary = compute_summary(&expenses, &incomes, "2026-11-13");
     assert_eq!(summary.joao.committed_pct, 200);
@@ -145,10 +236,50 @@ fn committed_pct_is_capped_like_the_web() {
 #[test]
 fn upcoming_and_overdue_sorting() {
     let expenses = vec![
-        to_expense(expense("Later", 1_000, Kind::Expense, Responsible::Shared, 50.0, None, None, false, Some("2026-11-28"))),
-        to_expense(expense("Past", 1_000, Kind::Expense, Responsible::Shared, 50.0, None, None, false, Some("2026-11-01"))),
-        to_expense(expense("PaidPast", 1_000, Kind::Expense, Responsible::Shared, 50.0, None, None, true, Some("2026-11-01"))),
-        to_expense(expense("NoDue", 1_000, Kind::Expense, Responsible::Shared, 50.0, None, None, false, None)),
+        to_expense(expense(
+            "Later",
+            1_000,
+            Kind::Expense,
+            Responsible::Shared,
+            50.0,
+            None,
+            None,
+            false,
+            Some("2026-11-28"),
+        )),
+        to_expense(expense(
+            "Past",
+            1_000,
+            Kind::Expense,
+            Responsible::Shared,
+            50.0,
+            None,
+            None,
+            false,
+            Some("2026-11-01"),
+        )),
+        to_expense(expense(
+            "PaidPast",
+            1_000,
+            Kind::Expense,
+            Responsible::Shared,
+            50.0,
+            None,
+            None,
+            true,
+            Some("2026-11-01"),
+        )),
+        to_expense(expense(
+            "NoDue",
+            1_000,
+            Kind::Expense,
+            Responsible::Shared,
+            50.0,
+            None,
+            None,
+            false,
+            None,
+        )),
     ];
     let summary = compute_summary(&expenses, &[], "2026-11-13");
     assert_eq!(summary.upcoming.len(), 2); // unpaid with due date, sorted

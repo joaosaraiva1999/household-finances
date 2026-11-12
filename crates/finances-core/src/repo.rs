@@ -7,9 +7,7 @@
 use rusqlite::params;
 
 use crate::error::{map_constraint, AppError, Result};
-use crate::model::{
-    days_from_civil, Expense, ExpensePatch, Income, IncomeUpsert, NewExpense,
-};
+use crate::model::{days_from_civil, Expense, ExpensePatch, Income, IncomeUpsert, NewExpense};
 use crate::validation::{self, Kind, Person, Responsible};
 
 // ─── Mapping ─────────────────────────────────────────────────────────────────
@@ -19,11 +17,13 @@ fn expense_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Expense> {
         id: row.get("id")?,
         name: row.get("name")?,
         amount_cents: row.get("amount_cents")?,
-        kind: Kind::parse(&row.get::<_, String>("kind")?)
-            .map_err(|e| rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(e)))?,
+        kind: Kind::parse(&row.get::<_, String>("kind")?).map_err(|e| {
+            rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(e))
+        })?,
         category: row.get("category")?,
-        responsible: Responsible::parse(&row.get::<_, String>("responsible")?)
-            .map_err(|e| rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(e)))?,
+        responsible: Responsible::parse(&row.get::<_, String>("responsible")?).map_err(|e| {
+            rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(e))
+        })?,
         joao_share: row.get("joao_share")?,
         joao_paid_cents: row.get("joao_paid_cents")?,
         anna_paid_cents: row.get("anna_paid_cents")?,
@@ -39,8 +39,9 @@ fn expense_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Expense> {
 fn income_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Income> {
     Ok(Income {
         id: row.get("id")?,
-        person: Person::parse(&row.get::<_, String>("person")?)
-            .map_err(|e| rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(e)))?,
+        person: Person::parse(&row.get::<_, String>("person")?).map_err(|e| {
+            rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(e))
+        })?,
         month: row.get("month")?,
         salary_cents: row.get("salary_cents")?,
         meal_card_cents: row.get("meal_card_cents")?,
@@ -95,12 +96,9 @@ pub fn validate_new_expense(e: &NewExpense) -> Result<NewExpense> {
     let category = validation::normalize_category(&e.category);
     if let Some(due) = &e.due_date {
         validation::parse_due_date(due)?;
-        // due date must fall inside the expense's month
-        if !due.starts_with(&format!("{}-", e.month)) {
-            return Err(AppError::Validation(
-                "Due date must fall inside the expense month".to_string(),
-            ));
-        }
+        // NOTE: no in-month restriction — the web API accepts any real
+        // calendar date here and both implementations must behave
+        // identically for the same input (cross-version parity).
     }
     let joao_share = validation::validate_share(e.joao_share)?;
     let mut out = e.clone();
@@ -155,10 +153,7 @@ pub fn get_expense(conn: &rusqlite::Connection, id: &str) -> Result<Option<Expen
 
 /// List all expenses of a month, sorted like the web API
 /// (due date first, then name).
-pub fn list_expenses_by_month(
-    conn: &rusqlite::Connection,
-    month: &str,
-) -> Result<Vec<Expense>> {
+pub fn list_expenses_by_month(conn: &rusqlite::Connection, month: &str) -> Result<Vec<Expense>> {
     let month = validation::parse_month(month)?;
     let sql = format!(
         "SELECT {EXPENSE_COLS} FROM expenses WHERE month = ?1 \
@@ -204,12 +199,13 @@ pub fn update_expense(
         .amount_cents
         .map(validation::validate_expense_cents)
         .transpose()?;
-    if let Some(due) = &patch.due_date {
-        if let Some(due) = due {
-            validation::parse_due_date(due)?;
-        }
+    if let Some(Some(due)) = &patch.due_date {
+        validation::parse_due_date(due)?;
     }
-    let category = patch.category.as_ref().map(|c| validation::normalize_category(c));
+    let category = patch
+        .category
+        .as_ref()
+        .map(|c| validation::normalize_category(c));
 
     let mut out = existing.clone();
     if let Some(v) = name {
@@ -252,7 +248,11 @@ pub fn update_expense(
             out.anna_paid_cents = None;
         }
         if out.responsible != Responsible::Shared {
-            out.joao_share = if out.responsible == Responsible::Joao { 100.0 } else { 0.0 };
+            out.joao_share = if out.responsible == Responsible::Joao {
+                100.0
+            } else {
+                0.0
+            };
         }
     } else {
         // shared + money-out
@@ -345,11 +345,7 @@ pub fn person_share_cents(e: &Expense, person: Person) -> i64 {
 /// Keep the provided amount for one person; the other covers the remainder.
 /// Mirrors `normalizePaidSplit` (integer-cents variant).
 #[must_use]
-pub fn normalize_paid_split(
-    amount_cents: i64,
-    joao: Option<i64>,
-    anna: Option<i64>,
-) -> (i64, i64) {
+pub fn normalize_paid_split(amount_cents: i64, joao: Option<i64>, anna: Option<i64>) -> (i64, i64) {
     if amount_cents <= 0 {
         return (0, 0);
     }
@@ -375,22 +371,15 @@ fn scale_paid(old_joao: i64, old_amount: i64, new_amount: i64) -> i64 {
 
 /// Create or update a person's monthly income. `None` fields keep their
 /// current value (or 0 on create).
-pub fn upsert_income(
-    conn: &rusqlite::Connection,
-    input: &IncomeUpsert,
-) -> Result<Income> {
+pub fn upsert_income(conn: &rusqlite::Connection, input: &IncomeUpsert) -> Result<Income> {
     validation::parse_month(&input.month)?;
     let salary = match input.salary_cents {
         Some(v) => validation::validate_income_cents(v)?,
-        None => {
-            existing_field(conn, &input.person, &input.month, "salary_cents")?.unwrap_or(0)
-        }
+        None => existing_field(conn, &input.person, &input.month, "salary_cents")?.unwrap_or(0),
     };
     let meal = match input.meal_card_cents {
         Some(v) => validation::validate_income_cents(v)?,
-        None => {
-            existing_field(conn, &input.person, &input.month, "meal_card_cents")?.unwrap_or(0)
-        }
+        None => existing_field(conn, &input.person, &input.month, "meal_card_cents")?.unwrap_or(0),
     };
 
     let changed = conn
@@ -417,7 +406,9 @@ pub fn upsert_income(
                FROM incomes WHERE person = ?1 AND month = ?2";
     let mut stmt = conn.prepare(sql)?;
     let mut rows = stmt.query_map(params![input.person.as_str(), input.month], income_from_row)?;
-    Ok(rows.next().transpose()?.ok_or_else(|| AppError::NotFound("income".into()))?)
+    rows.next()
+        .transpose()?
+        .ok_or_else(|| AppError::NotFound("income".into()))
 }
 
 fn existing_field(
@@ -429,12 +420,8 @@ fn existing_field(
     // `column` is a compile-time caller constant (never user data); the value
     // is bound as a parameter.
     let sql = match column {
-        "salary_cents" => {
-            "SELECT salary_cents FROM incomes WHERE person = ?1 AND month = ?2"
-        }
-        "meal_card_cents" => {
-            "SELECT meal_card_cents FROM incomes WHERE person = ?1 AND month = ?2"
-        }
+        "salary_cents" => "SELECT salary_cents FROM incomes WHERE person = ?1 AND month = ?2",
+        "meal_card_cents" => "SELECT meal_card_cents FROM incomes WHERE person = ?1 AND month = ?2",
         _ => return Err(AppError::Validation("Unknown column".to_string())),
     };
     let mut stmt = conn.prepare(sql)?;
@@ -443,10 +430,7 @@ fn existing_field(
 }
 
 /// List incomes of a month.
-pub fn list_incomes_by_month(
-    conn: &rusqlite::Connection,
-    month: &str,
-) -> Result<Vec<Income>> {
+pub fn list_incomes_by_month(conn: &rusqlite::Connection, month: &str) -> Result<Vec<Income>> {
     let month = validation::parse_month(month)?;
     let mut stmt = conn.prepare(
         "SELECT id, person, month, salary_cents, meal_card_cents, created_at, updated_at \
@@ -645,11 +629,7 @@ fn breakdown_for(expenses: &[Expense], person: Person, income: Option<&Income>) 
 ///
 /// NOTE: every expense occupies the balance regardless of `paid` — payment
 /// status only tracks settlement. Credits add to income instead.
-pub fn compute_summary(
-    expenses: &[Expense],
-    incomes: &[Income],
-    today: &str,
-) -> HouseholdSummary {
+pub fn compute_summary(expenses: &[Expense], incomes: &[Income], today: &str) -> HouseholdSummary {
     let income_for = |p: Person| incomes.iter().find(|i| i.person == p);
     let joao = breakdown_for(expenses, Person::Joao, income_for(Person::Joao));
     let anna = breakdown_for(expenses, Person::Anna, income_for(Person::Anna));

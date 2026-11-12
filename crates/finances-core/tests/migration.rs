@@ -78,7 +78,11 @@ fn real_world_data_migrates_losslessly() {
 
     assert_eq!(report.expenses_migrated, 3);
     assert_eq!(report.incomes_migrated, 2);
-    assert!(report.warnings.is_empty(), "no warnings for clean data: {:?}", report.warnings);
+    assert!(
+        report.warnings.is_empty(),
+        "no warnings for clean data: {:?}",
+        report.warnings
+    );
 
     // Amounts became exact integer cents.
     let expenses = repo::list_all_expenses(&store.conn).unwrap();
@@ -95,7 +99,10 @@ fn real_world_data_migrates_losslessly() {
 
     // Incomes preserved (float 50.5 → 5050 cents).
     let incomes = repo::list_all_incomes(&store.conn).unwrap();
-    let anna = incomes.iter().find(|i| i.person == finances_core::validation::Person::Anna).unwrap();
+    let anna = incomes
+        .iter()
+        .find(|i| i.person == finances_core::validation::Person::Anna)
+        .unwrap();
     assert_eq!(anna.salary_cents, 180_000);
     assert_eq!(anna.meal_card_cents, 5_050);
 
@@ -129,7 +136,11 @@ fn dirty_rows_are_repaired_and_reported_never_dropped() {
 
     // Every row survived.
     assert_eq!(report.expenses_migrated, 5);
-    assert!(report.warnings.len() >= 4, "expected warnings: {:?}", report.warnings);
+    assert!(
+        report.warnings.len() >= 4,
+        "expected warnings: {:?}",
+        report.warnings
+    );
 
     let expenses = repo::list_all_expenses(&store.conn).unwrap();
     let by_id = |id: &str| expenses.iter().find(|e| e.id == id).unwrap();
@@ -137,7 +148,10 @@ fn dirty_rows_are_repaired_and_reported_never_dropped() {
     assert_eq!(by_id("e2").name, "(sem nome)");
     assert_eq!(by_id("e3").amount_cents, 1); // clamped to the minimum
     assert_eq!(by_id("e4").month, "1970-01");
-    assert_eq!(by_id("e4").responsible, finances_core::validation::Responsible::Shared);
+    assert_eq!(
+        by_id("e4").responsible,
+        finances_core::validation::Responsible::Shared
+    );
     assert_eq!(by_id("e4").joao_share, 50.0);
     assert_eq!(
         by_id("e5").name,

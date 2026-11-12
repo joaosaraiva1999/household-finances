@@ -1,16 +1,19 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { read, write } from "@/lib/transport";
 import type { MonthData } from "@/lib/finance";
 
-async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(url, init);
-  const body = await res.json().catch(() => null);
-  if (!res.ok) {
-    throw new Error(body?.error ?? `Request failed (${res.status})`);
-  }
-  return body as T;
-}
+/**
+ * Data layer for the household finances app.
+ *
+ * Every hook transparently works in both builds: the browser talks to the
+ * Next.js API routes (`/api/*`), the Tauri desktop build invokes the Rust
+ * commands of `finances-core`. Both backends return identical JSON shapes
+ * (pinned by the Rust golden tests in `crates/finances-core/src/view.rs`
+ * and the cross-version parity suite in `tests/`), so components do not
+ * need to know which one is active.
+ */
 
 export interface FinanceResponse extends MonthData {
   summary: import("@/lib/finance").HouseholdSummary;
@@ -21,7 +24,7 @@ export interface FinanceResponse extends MonthData {
 export function useFinance(month: string) {
   return useQuery<FinanceResponse>({
     queryKey: ["finance", month],
-    queryFn: () => fetchJson(`/api/finance?month=${month}`),
+    queryFn: () => read<FinanceResponse>(`/api/finance?month=${month}`, "get_month_data", { month }),
   });
 }
 
@@ -32,11 +35,13 @@ export function useSetIncome(month: string) {
     mutationFn: (
       vars: { person: "joao" | "anna"; amount?: number; mealCard?: number },
     ) =>
-      fetchJson<{ income: unknown }>("/api/income", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...vars, month }),
-      }),
+      write<{ income: unknown }>(
+        "/api/income",
+        "POST",
+        { ...vars, month },
+        "save_income",
+        { input: { ...vars, month } },
+      ),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["finance"] }),
   });
 }
@@ -61,11 +66,13 @@ export function useCreateExpense(month: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (vars: ExpenseInput) =>
-      fetchJson<{ expense: unknown }>("/api/expenses", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...vars, month }),
-      }),
+      write<{ expense: unknown }>(
+        "/api/expenses",
+        "POST",
+        { ...vars, month },
+        "create_expense",
+        { input: { ...vars, month } },
+      ),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["finance"] }),
   });
 }
@@ -75,11 +82,13 @@ export function useUpdateExpense(month: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, ...patch }: { id: string } & Partial<ExpenseInput>) =>
-      fetchJson<{ expense: unknown }>(`/api/expenses/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(patch),
-      }),
+      write<{ expense: unknown }>(
+        `/api/expenses/${id}`,
+        "PATCH",
+        patch,
+        "update_expense",
+        { id, patch },
+      ),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["finance"] }),
   });
 }
@@ -89,7 +98,13 @@ export function useDeleteExpense(month: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) =>
-      fetchJson<{ ok: boolean }>(`/api/expenses/${id}`, { method: "DELETE" }),
+      write<{ ok: boolean }>(
+        `/api/expenses/${id}`,
+        "DELETE",
+        undefined,
+        "delete_expense",
+        { id },
+      ),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["finance"] }),
   });
 }

@@ -150,7 +150,10 @@ fn is_grouped(s: &str, sep: char) -> bool {
         return false;
     }
     let rest: Vec<&str> = parts.collect();
-    !rest.is_empty() && rest.iter().all(|p| p.len() == 3 && p.bytes().all(|b| b.is_ascii_digit()))
+    !rest.is_empty()
+        && rest
+            .iter()
+            .all(|p| p.len() == 3 && p.bytes().all(|b| b.is_ascii_digit()))
 }
 
 #[cfg(test)]
@@ -171,7 +174,14 @@ mod tests {
     #[test]
     fn parse_rejects_garbage_and_injection() {
         for bad in [
-            "", "abc", "1.2.3.4", "12; DROP TABLE x", "1'23", "--", "1e9", "12,5,6,7",
+            "",
+            "abc",
+            "1.2.3.4",
+            "12; DROP TABLE x",
+            "1'23",
+            "--",
+            "1e9",
+            "12,5,6,7",
         ] {
             assert_eq!(parse_amount_input(bad), None, "{bad:?} should not parse");
         }

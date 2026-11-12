@@ -52,7 +52,11 @@ fn injection_in_name_is_stored_verbatim_and_harmless() {
     let all = repo::list_all_expenses(&s.conn).unwrap();
     assert_eq!(all.len(), PAYLOADS.len());
     // Schema is intact: normal operations still work.
-    let normal = repo::insert_expense(&s.conn, &repo::validate_new_expense(&sample("Renda")).unwrap()).unwrap();
+    let normal = repo::insert_expense(
+        &s.conn,
+        &repo::validate_new_expense(&sample("Renda")).unwrap(),
+    )
+    .unwrap();
     assert_eq!(normal.name, "Renda");
     let got = repo::get_expense(&s.conn, &normal.id).unwrap().unwrap();
     assert_eq!(got.name, "Renda");
@@ -86,15 +90,26 @@ fn injection_in_month_filter_returns_validation_error_not_data() {
 #[test]
 fn injection_in_ids_is_rejected() {
     let s = store();
-    let e = repo::insert_expense(&s.conn, &repo::validate_new_expense(&sample("A")).unwrap()).unwrap();
+    let e =
+        repo::insert_expense(&s.conn, &repo::validate_new_expense(&sample("A")).unwrap()).unwrap();
 
-    for evil in ["x' OR '1'='1", "a'; DELETE FROM expenses;--", "id '--", "id'--"] {
+    for evil in [
+        "x' OR '1'='1",
+        "a'; DELETE FROM expenses;--",
+        "id '--",
+        "id'--",
+    ] {
         assert!(repo::get_expense(&s.conn, evil).is_err());
         assert!(repo::delete_expense(&s.conn, evil).is_err());
-        assert!(
-            repo::update_expense(&s.conn, evil, &ExpensePatch { paid: Some(true), ..Default::default() })
-                .is_err()
-        );
+        assert!(repo::update_expense(
+            &s.conn,
+            evil,
+            &ExpensePatch {
+                paid: Some(true),
+                ..Default::default()
+            }
+        )
+        .is_err());
     }
     // The original row is untouched.
     assert!(repo::get_expense(&s.conn, &e.id).unwrap().is_some());
@@ -104,14 +119,17 @@ fn injection_in_ids_is_rejected() {
 #[test]
 fn injection_in_update_fields_is_inert() {
     let s = store();
-    let e = repo::insert_expense(&s.conn, &repo::validate_new_expense(&sample("A")).unwrap()).unwrap();
+    let e =
+        repo::insert_expense(&s.conn, &repo::validate_new_expense(&sample("A")).unwrap()).unwrap();
 
     let patch = ExpensePatch {
         name: Some("B'); DROP TABLE expenses;--".to_string()),
         notes: Some(Some("x' OR amount_cents = amount_cents;--".to_string())),
         ..Default::default()
     };
-    let updated = repo::update_expense(&s.conn, &e.id, &patch).unwrap().unwrap();
+    let updated = repo::update_expense(&s.conn, &e.id, &patch)
+        .unwrap()
+        .unwrap();
     assert_eq!(updated.name, "B'); DROP TABLE expenses;--");
     assert_eq!(repo::count_expenses(&s.conn).unwrap(), 1);
 }
@@ -150,10 +168,15 @@ fn month_and_due_date_checks_block_spoofed_dates() {
     e2.due_date = Some("2026-11-31".into()); // impossible date
     assert!(repo::validate_new_expense(&e2).is_err());
 
+    // Parity with the web API: a REAL calendar date outside the expense's
+    // month is accepted (the web POST /api/expenses only validates that the
+    // date exists — same behaviour required here).
     let mut e3 = sample("C");
     e3.month = "2026-11".into();
-    e3.due_date = Some("2026-12-01".into()); // outside the month
-    assert!(repo::validate_new_expense(&e3).is_err());
+    e3.due_date = Some("2026-12-01".into());
+    let v3 = repo::validate_new_expense(&e3)
+        .expect("out-of-month real date must be accepted (web parity)");
+    assert_eq!(v3.due_date.as_deref(), Some("2026-12-01"));
 }
 
 #[test]
