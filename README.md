@@ -35,15 +35,15 @@ Start with the beginner-friendly **[desktop quick-start guide](./DESKTOP.md)**. 
 
 ## Download the desktop app
 
-Want to use Household Finances without installing Rust, Bun, Node.js, or opening a terminal? Download the latest Windows release from the **[Household Finances releases page](https://github.com/joaosaraiva1999/household-finances/releases/latest)**.
+Want to use Household Finances without installing Rust, Bun, Node.js, or opening a terminal? **[Download Household Finances for Windows](https://github.com/joaosaraiva1999/household-finances/releases/latest/download/household-finances.exe)**.
 
-1. Download the `.msi` installer (recommended) or the Windows `.exe` from **Assets**.
-2. Run the downloaded file and follow the installer steps.
-3. Open **Household Finances** from the Start menu.
+1. Download the portable `.exe` using the link above.
+2. Move it to a folder where you want to keep the app.
+3. Double-click it to launch **Household Finances**.
 
-The installed desktop app runs fully offline and stores its data separately from the web app. It includes native menus, backups and restore, CSV export, and an import option for data from the web version. You do not need the development commands below when using a published release.
+The desktop app runs fully offline and stores its data separately from the web app. It includes native menus, backups and restore, CSV export, and an import option for data from the web version. You do not need the development commands below when using the published release.
 
-If the release page has no files yet, the project has not published a desktop build. See the [desktop quick-start guide](./DESKTOP.md) for local development or the [technical desktop notes](./docs/DESKTOP.md) for build instructions.
+See the [latest release notes and checksum](https://github.com/joaosaraiva1999/household-finances/releases/latest). For local development or building from source, use the [desktop quick-start guide](./DESKTOP.md).
 
 ## Features
 
