@@ -31,7 +31,19 @@ Household Finances is a local-first web app for couples or flatmates who manage 
 | Storage | SQLite via Prisma (`db/custom.db`) | SQLite in the OS app-data dir, integer cents |
 | Extras | — | Native menus, backups/restore, CSV export, web-data import |
 
-See **[DESKTOP.md](./DESKTOP.md)** for architecture, install instructions and build commands.
+Start with the beginner-friendly **[desktop quick-start guide](./DESKTOP.md)**. The deeper contributor notes are in [docs/DESKTOP.md](./docs/DESKTOP.md).
+
+## Download the desktop app
+
+Want to use Household Finances without installing Rust, Bun, Node.js, or opening a terminal? Download the latest Windows release from the **[Household Finances releases page](https://github.com/joaosaraiva1999/household-finances/releases/latest)**.
+
+1. Download the `.msi` installer (recommended) or the Windows `.exe` from **Assets**.
+2. Run the downloaded file and follow the installer steps.
+3. Open **Household Finances** from the Start menu.
+
+The installed desktop app runs fully offline and stores its data separately from the web app. It includes native menus, backups and restore, CSV export, and an import option for data from the web version. You do not need the development commands below when using a published release.
+
+If the release page has no files yet, the project has not published a desktop build. See the [desktop quick-start guide](./DESKTOP.md) for local development or the [technical desktop notes](./docs/DESKTOP.md) for build instructions.
 
 ## Features
 
@@ -43,13 +55,13 @@ See **[DESKTOP.md](./DESKTOP.md)** for architecture, install instructions and bu
 - **EN / PT bilingual UI** — one click switches the entire interface, persisted in `localStorage`
 - **Dark & light mode** — natural, minimalistic earth-tone palette (sage / clay / ochre) with glassmorphism styling
 - **Responsive** — sidebar navigation on desktop, collapsible drawer on mobile
-- **Desktop app (Rust / Tauri 2)** — the same UI compiled to a fully offline desktop program: SQLite in the OS app-data folder, integer-cents money math, checksummed backups, CSV export, native menu, zero network I/O — see [docs/DESKTOP.md](./docs/DESKTOP.md)
+- **Desktop app (Rust / Tauri 2)** — the same UI compiled to a fully offline desktop program: SQLite in the OS app-data folder, integer-cents money math, checksummed backups, CSV export, native menu, zero network I/O — see the [desktop guide](./DESKTOP.md)
 
 ## Security & privacy
 
 This app handles personal financial data, so privacy was a design requirement, not an afterthought:
 
-- **Local-first storage** — all data lives in a single SQLite file on your machine (`db/custom.db`). There is no cloud, no sync, no server-side account. Nothing leaves your device.
+- **Local-first storage** — the web app uses `db/custom.db`; the desktop app uses its own SQLite file in the operating system app-data folder. There is no cloud, no sync, no server-side account. Nothing leaves your device.
 - **Zero external requests** — no analytics, no tracking, no telemetry, no third-party CDN calls. Fonts are downloaded once at build time and self-hosted by Next.js (`next/font`); every asset is served from your own app.
 - **Injection-proofed** — SQL, XML, CSS and CSV outputs are hardened: parameterized queries only (Prisma on the web, bound parameters in the Rust core), strict zod/Rust validation on every input, database-level `CHECK` constraints, and escape/sanitization guardrails for XML, CSV (formula injection) and CSS. All of it is pinned by an automated suite of **185 tests** (unit, API integration, middleware, cross-version parity, browser E2E) — plus regression tests for every bug the audit fixed.
 - **Hardened HTTP surface** — CSP (no framing, no objects, no base hijack, no cross-origin forms), `X-Frame-Options`, `nosniff`, strict referrer/permissions policies, HSTS, same-origin enforcement on mutations, request-size caps and rate limiting.
@@ -92,12 +104,22 @@ Open http://localhost:3000.
 
 ### Desktop app (optional)
 
-```bash
+~~~bash
 bun install
-bunx @tauri-apps/cli build   # → installers in src-tauri/target/release/bundle/
-```
+bunx @tauri-apps/cli dev    # development: opens a native desktop window
+~~~
 
-Full build/run/first-run data-migration instructions: [docs/DESKTOP.md](./docs/DESKTOP.md).
+For a production executable:
+
+~~~bash
+bunx @tauri-apps/cli build --no-bundle
+~~~
+
+The standalone Windows executable is written to target/release/household-finances.exe. To create MSI and NSIS installers, run bunx @tauri-apps/cli build; the installers appear under target/release/bundle/.
+
+Before starting the desktop command, stop any separate bun run dev server. The desktop app starts its own server in development.
+
+For first launch, daily use, backups, restore, CSV export, web-data import, database locations, and troubleshooting, read the [desktop quick-start guide](./DESKTOP.md).
 
 ## Testing
 
@@ -118,6 +140,10 @@ The full audit (coverage, fixed findings, parity results): [docs/AUDIT_REPORT.md
 | `bun run build` | Create a production build |
 | `bun run start` | Run the production build |
 | `bun run build:desktop` | Static export of the UI for the Tauri desktop shell |
+| `bunx @tauri-apps/cli dev` | Compile and open the native desktop app in development |
+| `bunx @tauri-apps/cli build --no-bundle` | Build the standalone desktop executable |
+| `bunx @tauri-apps/cli build` | Build the executable and platform installers |
+| `bun run desktop:icon` | Regenerate platform icons from desktop/icon-source.svg |
 | `bun run lint` | Run ESLint |
 | `bun test` | Run the web test suite |
 | `bun run db:push` | Push the Prisma schema to SQLite |

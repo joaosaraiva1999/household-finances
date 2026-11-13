@@ -1,108 +1,168 @@
-# Finanças da Casa — Aplicação de Ambiente de Trabalho (Desktop)
+# Household Finances desktop app
 
-A **versão desktop** do Finanças da Casa é uma aplicação nativa, **100% offline**, construída com **Rust + Tauri 2 + SQLite**. Reutiliza integralmente o frontend da versão web (mesmos componentes, design e funcionalidades), mas passa a correr como um programa normal do computador — sem browser, sem servidor, sem conta e sem Internet.
+The desktop app is the easiest way to use Household Finances on one computer. It opens as a normal Windows, macOS, or Linux application and stores everything locally in SQLite. There is no account, cloud sync, Node server, or internet connection required after the app is built.
 
-## Arquitetura
+This page is the quick-start guide. The deeper technical notes and test commands are in [docs/DESKTOP.md](./docs/DESKTOP.md).
 
-```
-┌──────────────────────────────────────────────────────────┐
-│  Janela nativa (Tauri 2 / WebKitGTK)                     │
-│  ┌────────────────────────────────────────────────────┐  │
-│  │  Frontend — o mesmo React app da versão web        │  │
-│  │  (bundled localmente com Vite, fontes incluídas)   │  │
-│  │                                                    │  │
-│  │  fetch("/api/…")  ──►  shim (desktop/fetch-shim.ts)│  │
-│  └───────────────────────┬────────────────────────────┘  │
-│                          │ invoke() — IPC local          │
-│  ┌───────────────────────▼────────────────────────────┐  │
-│  │  Backend Rust (src-tauri/src)                      │  │
-│  │  • SQLite em cents inteiros (sem erros de vírgula) │  │
-│  │  • Todas as validações e cálculos financeiros      │  │
-│  │  • Migrations com PRAGMA user_version              │  │
-│  │  • Backups/restauro/CSV com diálogos nativos       │  │
-│  │  • Menu nativo (Ficheiro/Editar/Ver/Definições)    │  │
-│  └────────────────────────────────────────────────────┘  │
-└──────────────────────────────────────────────────────────┘
-```
+## Choose the version you want
 
-**Privacidade por construção:** a base de dados fica na pasta de dados da aplicação do sistema operativo (ex.: `~/.local/share/app.financas.casa/` no Linux, `%APPDATA%/app.financas.casa` no Windows, `~/Library/Application Support/app.financas.casa` no macOS). Nenhum dado sai do computador; a aplicação não faz pedidos de rede (os únicos URLs no bundle são mensagens de erro internas do React, nunca acedidos).
+| Version | Best for | How it runs | Where data lives |
+| --- | --- | --- | --- |
+| Web | Development or browser use | A local Next.js server at http://localhost:3000 | db/custom.db |
+| Desktop | Everyday offline use | A native Tauri window | The operating system app-data folder |
 
-## Funcionalidades específicas da versão desktop
+The desktop and web databases are separate. Import your web data once if you want the desktop app to start with the same records.
 
-| Funcionalidade | Onde |
-| --- | --- |
-| Importar dados da versão web (ficheiro `custom.db`) | Primeira utilização (diálogo) ou menu **Ficheiro → Importar dados da versão web…** |
-| Backup completo da base de dados (snapshot `VACUUM INTO`) | **Ficheiro → Novo backup…** (Ctrl+B) |
-| Restaurar backup (valida o ficheiro + backup automático do estado atual antes de substituir) | **Ficheiro → Restaurar backup…** (Ctrl+R) |
-| Exportar CSV (ponto e vírgula, decimais com vírgula, datas DD/MM/AAAA — abre no Excel PT) | **Ficheiro → Exportar CSV…** (Ctrl+E) |
-| Zoom da interface / ecrã inteiro | **Ver** |
-| Mudar de idioma (PT/EN) e tema claro/escuro | **Definições** |
-| Versão da aplicação | **Ajuda → Acerca de** |
+## Windows: first launch in development
 
-Backups automáticos são criados em `<pasta de dados>/backups/` antes de migrações, restauros e importações (mantidos os 20 mais recentes).
+### 1. Install the prerequisites once
 
-## Requisitos
+- [Rust](https://rustup.rs/) using the default Windows/MSVC option. If the installer offers Visual Studio C++ Build Tools, install the Desktop development with C++ workload.
+- [Bun](https://bun.sh/), which runs the UI and Tauri commands.
+- WebView2, normally already included with Windows 10 and Windows 11.
 
-- **Linux:** Debian 12+/Ubuntu 22.04+ com `libwebkit2gtk-4.1-0` e `libgtk-3-0` (instalados automaticamente pelo .deb)
-- **Windows 10/11:** WebView2 (instalado automaticamente pelo instalador)
-- **macOS 10.15+**
+Node.js 18+ is also recommended because some project helper scripts call Node directly.
 
-## Instalar (Linux — Debian/Ubuntu)
+After installing Rust or Bun, close and reopen PowerShell. Check that the tools are visible:
 
-```bash
-sudo apt install ./Finanças\ da\ Casa_1.0.0_amd64.deb
-```
+~~~powershell
+rustc --version
+cargo --version
+bun --version
+~~~
 
-A aplicação fica disponível no menu de aplicações como **"Finanças da Casa"** (ou corra `financas-da-casa`).
+If rustc or cargo is installed but not found, add Rust to the current PowerShell session:
 
-## Compilar a partir do código-fonte
+~~~powershell
+$env:Path = "$env:USERPROFILE\.cargo\bin;$env:Path"
+~~~
 
-### Pré-requisitos (todas as plataformas)
+If Bun was installed with its standard installer but is not found, restart PowerShell first; its usual folder is %USERPROFILE%\.bun\bin.
 
-- [Rust](https://rustup.rs) 1.77+ (`rustup default stable`)
-- [Bun](https://bun.sh) (ou Node 18+)
-- [Tauri 2 system dependencies](https://v2.tauri.app/start/prerequisites/):
-  - **Linux:** `sudo apt install libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev`
-  - **Windows:** Visual Studio Build Tools + WebView2
-  - **macOS:** Xcode Command Line Tools
+### 2. Install the project dependencies
 
-### Comandos
+Open PowerShell in the project folder:
 
-```bash
-# 1. dependências de frontend
+~~~powershell
+cd "C:\Users\User\Desktop\Financial App\household-finances"
 bun install
+~~~
 
-# 2. gerar os ícones (apenas se alterares desktop/icon-source.png)
-bun run desktop:icon
+You only need to repeat bun install after dependency changes or a fresh checkout.
 
-# 3. instalar o package installável + arrancar em modo de desenvolvimento
-bun run tauri dev          # janela nativa com hot-reload do frontend
+### 3. Start the app
 
-# 4. construir os instaladores
-bun run tauri build
-```
+~~~powershell
+bunx @tauri-apps/cli dev
+~~~
 
-Resultados em `src-tauri/target/release/bundle/`:
+Tauri starts the Next.js development server on port 3000, compiles the Rust shell, and opens a native Household Finances window. The first Rust build can take 5–15 minutes; later launches are much faster.
 
-| Plataforma | Ficheiros |
+Stop the app with Ctrl+C in the terminal. If you previously started bun run dev separately, stop that server before starting Tauri so port 3000 is free.
+
+## How to use the app
+
+1. **Complete the first-run setup.** Enter the two household names when prompted. This is stored locally in the app.
+2. **Select a month.** The month selector keeps income, expenses, totals, charts, and upcoming bills in the same period.
+3. **Enter income.** Add each person's salary and meal-card amount in their person card. Income can be updated whenever it changes.
+4. **Add bills and other expenses.** Create an expense with its name, amount, category, due date, person responsible, paid status, and optional notes.
+5. **Record credits.** Use a credit for money coming in that is not salary, such as a refund, bonus, or meal-card top-up. Credits increase the available balance.
+6. **Split shared bills.** Use the shared option with the percentage split, or enter the exact amount each person paid. The app keeps the two shares aligned with the bill total.
+7. **Keep payment status current.** Mark an item paid or unpaid from the expense list. Unpaid bills remain part of the committed household balance.
+8. **Review the dashboard.** Use the filters, charts, person cards, and upcoming-bills section to see where the money went and what still needs attention.
+
+The native menu is currently Portuguese:
+
+- **Ficheiro**: create a backup, restore a backup, export CSV, import data from the web version, or quit.
+- **Definições**: switch between Portuguese and English and toggle light/dark mode.
+- **Ver**: zoom in, zoom out, reset zoom, or enter fullscreen.
+
+## Protect and move your data
+
+### Create a backup
+
+Use **Ficheiro → Novo backup…** and save the JSON backup somewhere outside the project folder, such as an external drive or cloud storage you trust. Make a backup before moving computers or installing a large update.
+
+### Restore a backup
+
+Use **Ficheiro → Restaurar backup…** and choose a backup file. The app validates the file and creates a safety copy of the current database before replacing its data. Restore replaces the current desktop data, so choose the file carefully.
+
+### Export CSV
+
+Use **Ficheiro → Exportar CSV…** when you need a spreadsheet-friendly copy. The export uses UTF-8 and protects against spreadsheet formula injection.
+
+### Import data from the web version
+
+The web app and desktop app use different database files. To bring the web records into a new desktop database:
+
+1. Close anything that is actively writing to the web database.
+2. Make a copy of the web database at db/custom.db. Keep the original untouched.
+3. Start the desktop app once so it creates its empty database.
+4. Choose **Ficheiro → Importar dados da versão web…**.
+5. Select the copy of custom.db and review the import report.
+
+The importer preserves IDs and timestamps, converts euro amounts to integer cents, repairs only values that need a minimal correction, and reports what it imported or skipped. Import into an empty desktop database on the first run.
+
+## Where the desktop database is stored
+
+| Operating system | Database path |
 | --- | --- |
-| Linux | `deb/Finanças da Casa_1.0.0_amd64.deb` · `appimage/*.AppImage` |
-| Windows | `msi/*.msi` e/ou `nsis/*.exe` |
-| macOS | `dmg/*.dmg` e `macos/*.app` |
+| Windows | %APPDATA%\com.joaosaraiva.household-finances\data.sqlite |
+| macOS | ~/Library/Application Support/com.joaosaraiva.household-finances/data.sqlite |
+| Linux | $XDG_DATA_HOME/com.joaosaraiva.household-finances/data.sqlite or ~/.local/share/com.joaosaraiva.household-finances/data.sqlite |
 
-> Cada instalador tem de ser gerado no respetivo sistema operativo (limitação normal do empacotamento desktop). A configuração do projeto (`tauri.conf.json`) já contempla as três plataformas — basta correr `bun run tauri build` em cada uma.
+Do not edit data.sqlite by hand. Use the app's backup, restore, CSV, and import actions instead.
 
-### Testes de paridade (Rust)
+## Build a standalone Windows executable
 
-```bash
-cd src-tauri && cargo test
-```
+To build the native executable without creating installers:
 
-Validam que o backend Rust produz **exatamente** os mesmos resultados que a API web original: divisão partilhada (`normalizePaidSplit`), percentagens derivadas, arredondamentos em cêntimos, regras de validação e cálculo do resumo mensal.
+~~~powershell
+$env:Path = "$env:USERPROFILE\.cargo\bin;$env:USERPROFILE\.bun\bin;$env:Path"
+bunx @tauri-apps/cli build --no-bundle
+~~~
 
-## Notas técnicas
+The executable is created at:
 
-- **Dinheiro em cêntimos inteiros** na base de dados (INTEGER) — zero erros de arredondamento de vírgula flutuante; a conversão para euros acontece apenas na fronteira JSON, com a mesma semântica `Math.round` do JS (testado).
-- **O frontend não foi reescrito**: o shim `desktop/fetch-shim.ts` interceta os `fetch("/api/…")` e encaminha-os por IPC para os comandos Rust, mantendo o contrato JSON idêntico ao da API web.
-- **Migrações:** `PRAGMA user_version` + SQL embutido; backup automático antes de qualquer migração numa base de dados existente.
-- **Sem telemetria, sem analytics, sem sincronização** — verificação: nenhum URL externo no bundle; nenhuma chamada de rede em execução normal.
+~~~text
+target\release\household-finances.exe
+~~~
+
+To create installers as well:
+
+~~~powershell
+bunx @tauri-apps/cli build
+~~~
+
+Windows installers are written under target\release\bundle\msi\ and target\release\bundle\nsis\. A previously installed copy or Start-menu shortcut will not update automatically; install the new MSI/NSIS package or launch the freshly built executable directly.
+
+## Common problems
+
+### bun or bunx is not recognized
+
+Close and reopen PowerShell after installing Bun. Verify with bun --version. bunx is included with Bun; it is not a separate package.
+
+### cargo metadata: program not found
+
+Rust is either not installed or %USERPROFILE%\.cargo\bin is not in the current terminal's PATH:
+
+~~~powershell
+$env:Path = "$env:USERPROFILE\.cargo\bin;$env:Path"
+cargo --version
+~~~
+
+### EADDRINUSE on port 3000
+
+Stop the separate web server with Ctrl+C. Tauri starts its own Next.js server.
+
+### Access denied while replacing household-finances.exe
+
+Close the running desktop app and any old household-finances.exe process, then run the build again.
+
+### The old icon is still visible
+
+Make sure you are launching target\release\household-finances.exe or installing the newest package. An old installed copy, shortcut, or Windows icon cache can continue to show the previous icon.
+
+### WebView2 says the resource is in use
+
+Close any existing Household Finances window and retry. If the old window is no longer visible, end only the related app process in Task Manager; restarting Windows clears a stuck WebView2 session.

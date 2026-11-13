@@ -10,7 +10,7 @@
     "lint": "eslint .",
     "desktop:dev": "vite --config desktop/vite.config.ts",
     "desktop:build": "vite build --config desktop/vite.config.ts",
-    "desktop:icon": "tauri icon desktop/icon-source.png",
+    "desktop:icon": "tauri icon desktop/icon-source.svg",
     "tauri": "tauri",
     "db:push": "prisma db push --accept-data-loss",
     "db:generate": "prisma generate",

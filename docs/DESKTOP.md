@@ -1,85 +1,135 @@
-# Desktop app (Rust / Tauri 2 / SQLite)
+# Desktop app: technical reference
 
-Fully offline desktop version of the household finances app. One React
-frontend, two backends:
+The [desktop quick-start guide](../DESKTOP.md) explains installation and everyday use. This page keeps the implementation details useful to contributors and anyone packaging the app.
 
-* **Web** — Next.js server + Prisma + `db/custom.db` (unchanged).
-* **Desktop** — Tauri 2 serves the same UI from a static export and all data
-  goes through Rust commands (`src-tauri/src/lib.rs`) into `finances-core`
-  (rusqlite, integer cents). No Node, no network, no accounts.
+## What the desktop app is
 
-The database lives in the OS application-data directory:
+The desktop version uses the same React interface as the web app, but replaces the web backend with a Rust/Tauri 2 shell and the finances-core SQLite library:
 
-| OS | Path |
-| --- | --- |
-| Windows | `%APPDATA%\com.joaosaraiva.household-finances\data.sqlite` |
-| macOS | `~/Library/Application Support/com.joaosaraiva.household-finances/data.sqlite` |
-| Linux | `$XDG_DATA_HOME/com.joaosaraiva.household-finances/data.sqlite` (default `~/.local/share/…`) |
+- The web version uses Next.js, Prisma, and db/custom.db.
+- The desktop version uses Tauri commands, rusqlite, and integer cents in the OS app-data directory.
+- The desktop frontend detects Tauri through src/lib/transport.ts and sends reads/writes through Rust IPC.
+- There is no account, cloud sync, analytics, telemetry, or required network connection at runtime.
+
+The desktop and web databases are intentionally separate. See the quick-start guide for the supported import workflow.
 
 ## Prerequisites
 
-* [Rust](https://rustup.rs) (stable) — `rustc 1.77+`
-* [Bun](https://bun.sh) (runs the UI build)
-* Platform packages (only what Tauri needs to compile the shell):
-  * **Windows**: WebView2 (pre-installed on Windows 10/11) + MSVC Build Tools
-  * **macOS**: Xcode Command Line Tools (`xcode-select --install`)
-  * **Debian/Ubuntu**: `libwebkit2gtk-4.1-dev build-essential libssl-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev`
+### Windows
 
-## Run in development
+- Stable [Rust](https://rustup.rs/) with the default MSVC toolchain.
+- Visual Studio C++ Build Tools, including the Desktop development with C++ workload.
+- [Bun](https://bun.sh/).
+- WebView2, normally included with Windows 10/11.
 
-```bash
+### macOS
+
+- Stable Rust and Bun.
+- Xcode Command Line Tools: xcode-select --install.
+
+### Debian/Ubuntu
+
+- Stable Rust and Bun.
+- Tauri platform packages:
+
+~~~bash
+sudo apt install libwebkit2gtk-4.1-dev build-essential libssl-dev \
+  libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
+~~~
+
+## Development workflow
+
+From the repository root:
+
+~~~bash
 bun install
-bunx @tauri-apps/cli dev          # builds the UI (bun run build:desktop is NOT used in dev —
-                                  # tauri.conf.json points devUrl at the Next dev server)
-```
+bunx @tauri-apps/cli dev
+~~~
 
-`tauri.conf.json` runs `bun run dev` (Next on port 3000) and opens a native
-window against it. Data still goes through the Rust commands (the UI detects
-the Tauri environment through `src/lib/transport.ts`).
+The beforeDevCommand in src-tauri/tauri.conf.json runs bun run dev. Tauri connects the native window to http://localhost:3000; it does not use the static desktop export during development. The Rust backend is still active, so development data follows the desktop database rules.
 
-## Production build
+Stop the process with Ctrl+C. Do not leave a separate bun run dev process listening on port 3000 when starting Tauri.
 
-```bash
-bun install
+## Production artifacts
+
+The beforeBuildCommand runs bun run build:desktop, which creates the static frontend in out/ while temporarily setting aside the web-only API routes. Tauri then compiles the Rust shell.
+
+Build the standalone executable:
+
+~~~bash
+bunx @tauri-apps/cli build --no-bundle
+~~~
+
+Build the executable and platform installers:
+
+~~~bash
 bunx @tauri-apps/cli build
-```
+~~~
 
-This runs `bun run build:desktop` (static export into `out/`, with the
-web-only API routes safely set aside), compiles the Rust shell in release
-mode and produces installers for the current OS in `src-tauri/target/release/bundle/`:
+On Windows, the Cargo workspace writes output under the repository-level target/ directory:
 
-| OS | Bundles |
+~~~text
+target/release/household-finances.exe
+target/release/bundle/msi/
+target/release/bundle/nsis/
+~~~
+
+Other platforms produce their normal Tauri bundles under target/release/bundle/:
+
+| Platform | Typical bundles |
 | --- | --- |
-| Windows | MSI (`msi/`), NSIS installer (`nsis/`) |
-| macOS | `.app` + `.dmg` (`dmg/`) |
-| Linux | `.deb` (`deb/`), `.rpm` (`rpm/`), AppImage (`appimage/`) |
+| Windows | .exe, MSI, NSIS installer |
+| macOS | .app, .dmg |
+| Linux | .deb, .rpm, AppImage |
 
-## Bringing your web data across (first run)
+The editable icon source is desktop/icon-source.svg; the generated platform icons live in src-tauri/icons/. Run bun run desktop:icon after changing the source icon.
 
-1. Build and start the desktop app once (creates the empty database).
-2. In the app (or via a small script using the same command), invoke
-   `migrate_legacy_cmd` with the path of a **copy** of the web database
-   (`db/custom.db`). The migration:
-   * backs up the target file first (`.pre-migration-*.bak`),
-   * converts every float euro amount to integer cents,
-   * preserves ids and timestamps,
-   * never drops a row — odd values are repaired minimally and reported,
-   * refuses to run on a non-empty database without `force`.
-3. Everything else is regular app usage: **File → Backup** writes a
-   checksummed JSON export; **File → Restore** verifies and atomically
-   replaces all data; CSV export writes RFC 4180 with formula-injection
-   protection and a UTF-8 BOM.
+## Database and data safety
 
-## Test suite (desktop side)
+The desktop database is created on first launch:
 
-```bash
-cargo test -p finances-core                    # 53 tests: validation, SQLi payloads,
-                                               # summary parity, backup/restore, migration
-cargo test -p finances-core --test rehearsal -- --ignored   # real-DB rehearsal (see file docs)
-cargo check -p household-finances              # Tauri shell type-check
-cargo clippy --workspace --all-targets         # zero warnings expected
-```
+| OS | Path |
+| --- | --- |
+| Windows | %APPDATA%\com.joaosaraiva.household-finances\data.sqlite |
+| macOS | ~/Library/Application Support/com.joaosaraiva.household-finances/data.sqlite |
+| Linux | $XDG_DATA_HOME/com.joaosaraiva.household-finances/data.sqlite (normally ~/.local/share/...) |
 
-The IPC layer is pinned to the web API contract by golden tests
-(`crates/finances-core/src/view.rs`) and the cross-version parity suite
-(`bun test tests/parity/parity.test.ts` runs both sides and compares).
+The app's supported data operations are exposed through the native **Ficheiro** menu:
+
+- **Novo backup…** writes a checksummed JSON backup.
+- **Restaurar backup…** validates the selected backup, creates an automatic pre-restore backup, and transactionally replaces the current rows.
+- **Exportar CSV…** writes RFC 4180-compatible CSV with a UTF-8 BOM and formula-injection protection.
+- **Importar dados da versão web…** reads a copy of the web SQLite database, converts floating euro values to integer cents, preserves IDs/timestamps where possible, and reports imported/skipped rows.
+
+For migration, always select a copy of db/custom.db. Do not point the importer at the only copy of the web database.
+
+## Testing and checks
+
+Desktop core tests:
+
+~~~bash
+cargo test -p finances-core
+cargo test -p finances-core --test rehearsal -- --ignored
+~~~
+
+Tauri shell type-check and lint:
+
+~~~bash
+cargo check -p household-finances
+cargo clippy --workspace --all-targets
+~~~
+
+The IPC layer is pinned to the web contract by golden tests in crates/finances-core/src/view.rs and the cross-version parity suite:
+
+~~~bash
+bun test tests/parity/parity.test.ts
+~~~
+
+## Troubleshooting build failures
+
+- **cargo metadata: program not found**: add %USERPROFILE%\.cargo\bin to the current terminal's PATH, then verify cargo --version.
+- **bun/bunx not recognized**: reopen the terminal after installing Bun; verify bun --version.
+- **EADDRINUSE on port 3000**: stop the separate Next.js server before running tauri dev.
+- **Executable locked or access denied**: close the running app before rebuilding.
+- **WebView2 resource in use**: close old app/WebView2 sessions or restart Windows, then retry.
+- **MSI ICE/Windows Installer errors**: build --no-bundle still produces the updated standalone executable; MSI packaging requires a working Windows Installer service.
